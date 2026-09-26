@@ -220,20 +220,100 @@ public class SafetyRepositoryTest {
         assertEquals(1, await(repository.validHistories()).size());
     }
 
-    @Test public void cleanupUsesSpecifiedCutoffAndPreservesOtherTables() throws Exception {
+    @Test public void cleanupUsesRepositoryClockAndPreservesOtherTables() throws Exception {
         await(repository.addWatchTarget(2, "target"));
         await(repository.receive(session, master.version, 2, 20));
         long end = db.safetyDao().session().endsAtWall;
         long expiry = end + TimeUnit.HOURS.toMillis(100);
         assertEquals(expiry, await(repository.validHistories()).get(0).historyExpiresAt);
-        assertEquals(0, (int) await(repository.deleteExpiredHistories(end)));
-        assertEquals(0, (int) await(repository.deleteExpiredHistories(expiry - 1)));
-        assertEquals(1, (int) await(repository.deleteExpiredHistories(expiry)));
-        assertEquals(0, (int) await(repository.deleteExpiredHistories(expiry + 1)));
+        now.set(end);
+        assertEquals(0, (int) await(repository.deleteExpiredHistories()));
+        now.set(expiry - 1);
+        assertEquals(0, (int) await(repository.deleteExpiredHistories()));
+        now.set(expiry);
+        assertEquals(1, (int) await(repository.deleteExpiredHistories()));
+        now.set(expiry + 1);
+        assertEquals(0, (int) await(repository.deleteExpiredHistories()));
         assertEquals(session, await(repository.currentSession()).sessionId);
         assertEquals(2, db.safetyDao().count());
         assertEquals(1, await(repository.watchTargets()).size());
-        assertFalse(await(repository.receive(session, master.version, 2, 20)).isNotificationRequired());
+        assertThrows(NoSuchMethodException.class,
+                () -> SafetyRepository.class.getMethod("deleteExpiredHistories", long.class));
+    }
+
+    @Test public void currentStatusesNeverUseOldHistoryAndDistinguishMissingPeriod() throws Exception {
+        await(repository.addWatchTarget(1, "self"));
+        await(repository.addWatchTarget(2, "target"));
+        assertEquals(WatchStatus.State.NOT_RECEIVED, await(repository.currentWatchStatuses()).get(0).state);
+        await(repository.receive(session, master.version, 2, 20));
+        assertEquals(WatchStatus.State.RECEIVED, await(repository.currentWatchStatuses()).get(1).state);
+        now.set(db.safetyDao().session().endsAtWall);
+        assertEquals(WatchStatus.State.NO_ACTIVE_SESSION, await(repository.currentWatchStatuses()).get(1).state);
+        String next = await(repository.startSession(1, 10));
+        assertEquals(1, await(repository.validHistories()).size());
+        assertEquals(WatchStatus.State.NOT_RECEIVED, await(repository.currentWatchStatuses()).get(1).state);
+        await(repository.receive(next, master.version, 2, 20));
+        assertEquals(WatchStatus.State.RECEIVED, await(repository.currentWatchStatuses()).get(1).state);
+        ActiveSession inactive = db.safetyDao().session();
+        inactive.state = "ENDED";
+        db.safetyDao().saveSession(inactive);
+        assertEquals(WatchStatus.State.NO_ACTIVE_SESSION, await(repository.currentWatchStatuses()).get(1).state);
+        db.getOpenHelper().getWritableDatabase().execSQL("DELETE FROM ActiveSession");
+        assertEquals(WatchStatus.State.NO_ACTIVE_SESSION, await(repository.currentWatchStatuses()).get(1).state);
+    }
+
+    @Test public void currentStatusIncludesReceiptBeforeWatchRegistration() throws Exception {
+        await(repository.receive(session, master.version, 2, 20));
+        await(repository.addWatchTarget(2, "late registration"));
+        assertTrue(await(repository.validHistories()).isEmpty());
+        assertEquals(WatchStatus.State.RECEIVED, await(repository.currentWatchStatuses()).get(0).state);
+    }
+
+    @Test public void pendingRecoveryAndConditionalDeliveryUpdates() throws Exception {
+        await(repository.addWatchTarget(2, "posted"));
+        await(repository.addWatchTarget(3, "blocked"));
+        await(repository.applyReceivedBatch(session, master.version,
+                Arrays.asList(new WireRecord(2, 20), new WireRecord(3, 30))));
+        db.close();
+        db = Room.databaseBuilder(context, AppDatabase.class, file).build();
+        repository = new SafetyRepository(db, executor, now::get, SafetyRepository.MAX_RECORDS, master);
+        List<SafetyRepository.NotificationRequest> pending = await(repository.findPendingNotifications(session));
+        assertEquals(2, pending.size());
+        assertTrue(await(repository.findPendingNotifications("other-session")).isEmpty());
+        long posted = pending.get(0).notificationId;
+        long blocked = pending.get(1).notificationId;
+        assertTrue(await(repository.markNotificationPosted(posted)));
+        assertFalse(await(repository.markNotificationPosted(posted)));
+        assertFalse(await(repository.markNotificationBlocked(posted)));
+        assertTrue(await(repository.markNotificationBlocked(blocked)));
+        assertFalse(await(repository.markNotificationPosted(blocked)));
+        assertFalse(await(repository.markNotificationPosted(Long.MAX_VALUE)));
+        assertTrue(await(repository.findPendingNotifications(session)).isEmpty());
+        assertEquals("POSTED", await(repository.validHistories()).get(0).deliveryState);
+        assertEquals("BLOCKED_PERMISSION", await(repository.validHistories()).get(1).deliveryState);
+    }
+
+    @Test public void pendingSurvivesSessionChangeButExpiresAtRetentionBoundary() throws Exception {
+        await(repository.addWatchTarget(2, "target"));
+        long id = await(repository.receive(session, master.version, 2, 20)).notifications.get(0).notificationId;
+        long expiry = await(repository.validHistories()).get(0).historyExpiresAt;
+        now.set(db.safetyDao().session().endsAtWall);
+        String next = await(repository.startSession(1, 10));
+        assertTrue(await(repository.findPendingNotifications(next)).isEmpty());
+        assertEquals(1, await(repository.findPendingNotifications(session)).size());
+        now.set(expiry);
+        assertTrue(await(repository.findPendingNotifications(session)).isEmpty());
+        assertFalse(await(repository.markNotificationPosted(id)));
+        assertFalse(await(repository.markNotificationBlocked(id)));
+    }
+
+    @Test public void deliveryUpdateFailurePreservesPendingForRetry() throws Exception {
+        await(repository.addWatchTarget(2, "target"));
+        long id = await(repository.receive(session, master.version, 2, 20)).notifications.get(0).notificationId;
+        db.getOpenHelper().getWritableDatabase().execSQL(
+                "CREATE TRIGGER fail_delivery BEFORE UPDATE ON NotificationHistory BEGIN SELECT RAISE(ABORT, 'failure'); END");
+        assertThrows(java.util.concurrent.ExecutionException.class, () -> await(repository.markNotificationPosted(id)));
+        assertEquals(1, await(repository.findPendingNotifications(session)).size());
     }
 
     @Test public void failureAfterHistoryInsertRollsBackNotificationAndRecord() throws Exception {

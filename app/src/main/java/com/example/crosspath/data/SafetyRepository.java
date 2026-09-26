@@ -221,21 +221,69 @@ public final class SafetyRepository {
                 () -> db.safetyDao().deleteWatchTarget(userId) != 0), executor);
     }
 
-    /** Evaluate expiry when the queued read executes, not when it is enqueued. */
+    /**
+     * SC04/SC06 current-period status, read atomically with the session and records.
+     * Expired/inactive/missing sessions yield NO_ACTIVE_SESSION for every target.
+     * SELF records are not received records. An empty list means no registered targets.
+     */
+    public CompletableFuture<List<WatchStatus>> currentWatchStatuses() {
+        return CompletableFuture.supplyAsync(() -> db.runInTransaction(() -> {
+            ActiveSession session = db.safetyDao().session();
+            long now = clock.getAsLong();
+            boolean active = session != null && "ACTIVE".equals(session.state)
+                    && now >= session.startedAtWall && now < session.endsAtWall;
+            List<WatchStatus> statuses = new ArrayList<>();
+            for (SafetyDao.WatchRow row : db.safetyDao().watchStatuses(active ? session.sessionId : null)) {
+                statuses.add(new WatchStatus(row.targetUserId, row.displayName,
+                        !active ? WatchStatus.State.NO_ACTIVE_SESSION
+                                : row.received ? WatchStatus.State.RECEIVED : WatchStatus.State.NOT_RECEIVED));
+            }
+            return Collections.unmodifiableList(statuses);
+        }), executor);
+    }
+
+    /**
+     * History display ONLY: includes unexpired histories across sessions.
+     * Never use this to determine current receipt marks; use currentWatchStatuses().
+     * Evaluate expiry when the queued read executes, not when it is enqueued.
+     */
     public CompletableFuture<List<NotificationHistory>> validHistories() {
         return CompletableFuture.supplyAsync(
                 () -> db.safetyDao().validHistories(clock.getAsLong()), executor);
     }
 
+    /** Uses the repository clock at execution; no caller-controlled future cutoff is accepted. */
     public CompletableFuture<Integer> deleteExpiredHistories() {
         return CompletableFuture.supplyAsync(
                 () -> db.safetyDao().deleteExpiredHistories(clock.getAsLong()), executor);
     }
 
-    /** Deletes only histories whose expiry is <= cutoff, matching validHistories' exclusive bound. */
-    public CompletableFuture<Integer> deleteExpiredHistories(long cutoff) {
-        return CompletableFuture.supplyAsync(
-                () -> db.safetyDao().deleteExpiredHistories(cutoff), executor);
+    /** Recovery queue for any specified session (including past sessions), excluding expired rows. */
+    public CompletableFuture<List<NotificationRequest>> findPendingNotifications(String sessionId) {
+        Objects.requireNonNull(sessionId);
+        return CompletableFuture.supplyAsync(() -> {
+            List<NotificationRequest> pending = new ArrayList<>();
+            for (NotificationHistory history : db.safetyDao().pendingNotifications(sessionId, clock.getAsLong())) {
+                pending.add(new NotificationRequest(history.notificationId, history));
+            }
+            return Collections.unmodifiableList(pending);
+        }, executor);
+    }
+
+    /** Compare-and-set PENDING -> POSTED; false for missing, expired or already finalized rows. */
+    public CompletableFuture<Boolean> markNotificationPosted(long notificationId) {
+        return finishNotification(notificationId, "POSTED");
+    }
+
+    /** Compare-and-set PENDING -> BLOCKED_PERMISSION; no automatic retry after permission denial. */
+    public CompletableFuture<Boolean> markNotificationBlocked(long notificationId) {
+        return finishNotification(notificationId, "BLOCKED_PERMISSION");
+    }
+
+    private CompletableFuture<Boolean> finishNotification(long notificationId, String state) {
+        if (notificationId <= 0) throw new IllegalArgumentException("notificationId must be positive");
+        return CompletableFuture.supplyAsync(() -> db.runInTransaction(
+                () -> db.safetyDao().finishNotification(notificationId, state, clock.getAsLong()) == 1), executor);
     }
 
     private ActiveSession requireSession(String expectedId) {

@@ -39,6 +39,17 @@ abstract class SafetyDao {
     @Query("SELECT * FROM WatchTarget ORDER BY targetUserId")
     abstract List<WatchTarget> watchTargets();
 
+    static class WatchRow {
+        public int targetUserId;
+        public String displayName;
+        public boolean received;
+    }
+
+    @Query("SELECT w.targetUserId, w.displayName, (r.userId IS NOT NULL) AS received "
+            + "FROM WatchTarget w LEFT JOIN SafetyRecord r ON r.userId = w.targetUserId "
+            + "AND r.localSessionId = :sessionId AND r.sourceKind = 'RECEIVED' ORDER BY w.targetUserId")
+    abstract List<WatchRow> watchStatuses(String sessionId);
+
     @Query("DELETE FROM WatchTarget WHERE targetUserId = :id")
     abstract int deleteWatchTarget(int id);
 
@@ -50,4 +61,12 @@ abstract class SafetyDao {
 
     @Query("DELETE FROM NotificationHistory WHERE historyExpiresAt <= :now")
     abstract int deleteExpiredHistories(long now);
+
+    @Query("SELECT * FROM NotificationHistory WHERE localSessionId = :sessionId "
+            + "AND historyExpiresAt > :now AND deliveryState = 'PENDING' ORDER BY notificationId")
+    abstract List<NotificationHistory> pendingNotifications(String sessionId, long now);
+
+    @Query("UPDATE NotificationHistory SET deliveryState = :state WHERE notificationId = :id "
+            + "AND deliveryState = 'PENDING' AND historyExpiresAt > :now")
+    abstract int finishNotification(long id, String state, long now);
 }
