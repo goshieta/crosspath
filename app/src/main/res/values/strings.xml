@@ -18,10 +18,8 @@
     <!-- SC01 -->
     <string name="sc01_title">初回登録</string>
     <string name="sc01_hint_name">自分の名前を入力</string>
-    <string name="sc01_register_success">登録しました</string>
-    <string name="sc01_register_failed">登録失敗しました。再試行してください</string>
-    <string name="sc01_id_card_title">あなたの個人ID</string>
     <string name="sc01_error_blank_name">空白のみの名前は登録できません</string>
+    <string name="sc01_id_card_title">あなたの個人ID</string>
     <string name="sc01_toast_copied">個人IDをコピーしました</string>
     <!-- SC02 -->
     <string name="sc02_title">ホーム</string>

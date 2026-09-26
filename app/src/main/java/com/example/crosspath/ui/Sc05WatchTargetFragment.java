@@ -4,7 +4,6 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -17,6 +16,7 @@ import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
 import com.example.crosspath.ui.sample.SampleData;
 import com.example.crosspath.ui.theme.ScreenThemes;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.snackbar.Snackbar;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
@@ -29,7 +29,7 @@ import java.util.Set;
 /**
  * SC05 通知対象者管理画面。仕様: 詳細設計書 v0.8 §11.6
  *
- * ID・名前入力、登録、既登録一覧（各行に削除）、ホーム（→ SC02）。
+ * ID・名前入力、登録（成功時 Snackbar）、既登録一覧（各行に削除）、ホーム（→ SC02）。
  */
 public class Sc05WatchTargetFragment extends Fragment {
 
@@ -37,10 +37,9 @@ public class Sc05WatchTargetFragment extends Fragment {
     private TextInputEditText idEditText;
     private TextInputLayout nameInputLayout;
     private TextInputEditText nameEditText;
-    private Button registerButton;
-    private TextView resultText;
+    private MaterialButton registerButton;
     private RecyclerView watchList;
-    private Button homeButton;
+    private MaterialButton homeButton;
 
     /** メモリ上の登録リスト（画面内のみ）。TODO(段階2: Room の WatchTarget に置換) */
     private final List<SampleData.SampleWatchTarget> registeredList = new ArrayList<>();
@@ -65,7 +64,6 @@ public class Sc05WatchTargetFragment extends Fragment {
         nameInputLayout = view.findViewById(R.id.sc05_name_input_layout);
         nameEditText = view.findViewById(R.id.sc05_name_edit_text);
         registerButton = view.findViewById(R.id.sc05_button_register);
-        resultText = view.findViewById(R.id.sc05_result_text);
         watchList = view.findViewById(R.id.sc05_watch_list);
         homeButton = view.findViewById(R.id.sc05_button_home);
 
@@ -91,7 +89,7 @@ public class Sc05WatchTargetFragment extends Fragment {
         String id = idEditText.getText() != null ? idEditText.getText().toString().trim() : "";
         String name = nameEditText.getText() != null ? nameEditText.getText().toString().trim() : "";
 
-        // 入力検証
+        // 入力検証 — エラーは TextInputLayout#setError で対象欄の下に表示（仕様 §11.12）
         boolean hasError = false;
 
         if (id.isEmpty()) {
@@ -125,8 +123,8 @@ public class Sc05WatchTargetFragment extends Fragment {
         idEditText.setText("");
         nameEditText.setText("");
 
-        resultText.setText(R.string.sc05_register_success);
-        resultText.setVisibility(View.VISIBLE);
+        // 成功通知は Snackbar（一時的な結果: 仕様 §11.12 が許容）
+        Snackbar.make(requireView(), R.string.sc05_register_success, Snackbar.LENGTH_SHORT).show();
     }
 
     private void onHomeClicked() {
@@ -179,7 +177,7 @@ public class Sc05WatchTargetFragment extends Fragment {
         class ViewHolder extends RecyclerView.ViewHolder {
             final TextView idText;
             final TextView nameText;
-            final Button deleteButton;
+            final MaterialButton deleteButton;
 
             ViewHolder(View itemView) {
                 super(itemView);

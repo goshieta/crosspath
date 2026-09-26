@@ -1,10 +1,12 @@
 package com.example.crosspath.ui;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -15,6 +17,7 @@ import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
 import com.example.crosspath.ui.sample.SampleData;
 import com.example.crosspath.ui.theme.ScreenThemes;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.snackbar.Snackbar;
 import com.google.android.material.textfield.TextInputEditText;
@@ -30,19 +33,17 @@ public class Sc01RegistrationFragment extends Fragment {
 
     private TextInputLayout nameInputLayout;
     private TextInputEditText nameEditText;
-    private Button registerButton;
-    private TextView resultText;
+    private MaterialButton registerButton;
     private MaterialCardView idCard;
     private TextView idValueText;
-    private Button copyButton;
-    private Button homeButton;
+    private MaterialButton copyButton;
+    private MaterialButton homeButton;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        // SC01 はライトテーマ（SC04以外は共通ライト）
         LayoutInflater themedInflater = ScreenThemes.themedLayoutInflater(inflater, Screen.SC01);
         return themedInflater.inflate(R.layout.fragment_sc01_registration, container, false);
     }
@@ -54,9 +55,8 @@ public class Sc01RegistrationFragment extends Fragment {
         nameInputLayout = view.findViewById(R.id.sc01_name_input_layout);
         nameEditText = view.findViewById(R.id.sc01_name_edit_text);
         registerButton = view.findViewById(R.id.sc01_button_register);
-        resultText = view.findViewById(R.id.sc01_result_text);
-        idCard = view.findViewById(R.id.sc01_id_card);
         idValueText = view.findViewById(R.id.sc01_id_value);
+        idCard = view.findViewById(R.id.sc01_id_card);
         copyButton = view.findViewById(R.id.sc01_button_copy);
         homeButton = view.findViewById(R.id.sc01_button_home);
 
@@ -64,7 +64,6 @@ public class Sc01RegistrationFragment extends Fragment {
         idCard.setVisibility(View.GONE);
         copyButton.setVisibility(View.GONE);
         homeButton.setVisibility(View.GONE);
-        resultText.setVisibility(View.GONE);
 
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).applyScreenTheme(Screen.SC01);
@@ -78,7 +77,7 @@ public class Sc01RegistrationFragment extends Fragment {
     private void onRegisterClicked() {
         String name = nameEditText.getText() != null ? nameEditText.getText().toString().trim() : "";
 
-        // 空白のみの名前は登録不可（仕様 §11.2）
+        // 空白のみの名前は登録不可（仕様 §11.2）— TextInputLayout#setError で表示
         if (name.isEmpty()) {
             nameInputLayout.setError(getString(R.string.sc01_error_blank_name));
             return;
@@ -87,34 +86,17 @@ public class Sc01RegistrationFragment extends Fragment {
 
         // TODO(段階2: 登録APIを呼び出し、成功/失敗を判定する)
         // 暫定: 常に成功として SampleData.MY_USER_ID を表示
-        registerButton.setEnabled(false);
-        registerButton.setText("");
-
-        // 成功表示
         idValueText.setText(SampleData.MY_USER_ID);
         idCard.setVisibility(View.VISIBLE);
         copyButton.setVisibility(View.VISIBLE);
         homeButton.setVisibility(View.VISIBLE);
-        resultText.setText(R.string.sc01_register_success);
-        resultText.setVisibility(View.VISIBLE);
-
-        registerButton.setEnabled(true);
-        registerButton.setText(R.string.action_register);
     }
 
     private void onCopyClicked() {
-        // クリップボードにコピー（OS の UI 機能なので実装してよい: 仕様 §3）
         String id = idValueText.getText() != null ? idValueText.getText().toString() : "";
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            android.content.ClipboardManager clipboard =
-                    (android.content.ClipboardManager) requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
-            android.content.ClipData clip = android.content.ClipData.newPlainText("個人ID", id);
-            clipboard.setPrimaryClip(clip);
-        } else {
-            android.text.ClipboardManager clipboard =
-                    (android.text.ClipboardManager) requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
-            clipboard.setText(id);
-        }
+        ClipboardManager clipboard = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+        ClipData clip = ClipData.newPlainText("個人ID", id);
+        clipboard.setPrimaryClip(clip);
         Snackbar.make(requireView(), R.string.sc01_toast_copied, Snackbar.LENGTH_SHORT).show();
     }
 
