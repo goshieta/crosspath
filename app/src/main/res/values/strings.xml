@@ -33,6 +33,9 @@
     <string name="sc03_error_start_failed">通信期間を開始できませんでした</string>
     <!-- SC04 -->
     <string name="sc04_title">緊急時画面</string>
+    <string name="sc04_comm_active">通信期間中</string>
+    <string name="sc04_comm_inactive">未開始</string>
+    <string name="sc04_no_watch_targets">通知対象者が登録されていません</string>
     <!-- SC05 -->
     <string name="sc05_title">通知対象者管理</string>
     <string name="sc05_hint_target_id">対象者の個人ID</string>

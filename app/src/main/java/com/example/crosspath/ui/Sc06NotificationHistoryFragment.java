@@ -15,7 +15,8 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
-import com.example.crosspath.ui.sample.SampleData;
+import com.example.crosspath.data.WatchStatus;
+import com.example.crosspath.ui.data.UiData;
 import com.example.crosspath.ui.theme.ScreenThemes;
 import com.example.crosspath.ui.theme.StatusBadge;
 
@@ -51,21 +52,58 @@ public class Sc06NotificationHistoryFragment extends Fragment {
         safetyList.setLayoutManager(new LinearLayoutManager(requireContext()));
         safetyList.setItemAnimator(new DefaultItemAnimator());
 
-        // TODO(段階2: Room の SafetyRecord 照合に置換)
-        if (SampleData.HAS_ACTIVE_SESSION) {
-            SafetyStatusAdapter adapter = new SafetyStatusAdapter(SampleData.WATCH_TARGETS);
-            safetyList.setAdapter(adapter);
-            safetyList.setVisibility(View.VISIBLE);
-            noSessionText.setVisibility(View.GONE);
-        } else {
-            safetyList.setVisibility(View.GONE);
-            noSessionText.setVisibility(View.VISIBLE);
-        }
-
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).applyScreenTheme(Screen.SC06);
         }
 
+        loadWatchStatuses();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // 復帰時に最新データを取り直す
+        loadWatchStatuses();
+    }
+
+    /** 受信状態一覧を UiData 経由で読み込み、表示する。 */
+    private void loadWatchStatuses() {
+        if (!isAdded()) return;
+        UiData.whenReady(repo ->
+            UiData.onResult(repo.currentWatchStatuses(), statuses -> {
+                if (!isAdded() || getView() == null) return;
+                if (statuses == null || statuses.isEmpty()) {
+                    // 通知対象者が未登録
+                    noSessionText.setText(R.string.sc04_no_watch_targets);
+                    noSessionText.setVisibility(View.VISIBLE);
+                    safetyList.setVisibility(View.GONE);
+                } else if (allNoActiveSession(statuses)) {
+                    // 全要素 NO_ACTIVE_SESSION → 現在の通信期間なし
+                    noSessionText.setText(R.string.state_no_session);
+                    noSessionText.setVisibility(View.VISIBLE);
+                    safetyList.setVisibility(View.GONE);
+                } else {
+                    noSessionText.setVisibility(View.GONE);
+                    SafetyStatusAdapter adapter = new SafetyStatusAdapter(statuses);
+                    safetyList.setAdapter(adapter);
+                    safetyList.setVisibility(View.VISIBLE);
+                }
+            }, error -> {
+                if (!isAdded() || getView() == null) return;
+                noSessionText.setText(R.string.state_no_session);
+                noSessionText.setVisibility(View.VISIBLE);
+                safetyList.setVisibility(View.GONE);
+            })
+        );
+    }
+
+    private static boolean allNoActiveSession(List<WatchStatus> statuses) {
+        for (WatchStatus ws : statuses) {
+            if (ws.state != WatchStatus.State.NO_ACTIVE_SESSION) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -74,9 +112,9 @@ public class Sc06NotificationHistoryFragment extends Fragment {
     private static class SafetyStatusAdapter
             extends RecyclerView.Adapter<SafetyStatusAdapter.ViewHolder> {
 
-        private final List<SampleData.SampleWatchTarget> items;
+        private final List<WatchStatus> items;
 
-        SafetyStatusAdapter(List<SampleData.SampleWatchTarget> items) {
+        SafetyStatusAdapter(List<WatchStatus> items) {
             this.items = items;
         }
 
@@ -90,12 +128,12 @@ public class Sc06NotificationHistoryFragment extends Fragment {
 
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            SampleData.SampleWatchTarget item = items.get(position);
+            WatchStatus item = items.get(position);
             holder.nameText.setText(item.displayName);
 
             // SC04 と同一の〇／ー表示（共通ヘルパ） 仕様 §11.8
             StatusBadge.bind(holder.statusText, holder.itemView,
-                    item.displayName, item.receivedThisSession);
+                    item.displayName, item.state == WatchStatus.State.RECEIVED);
         }
 
         @Override

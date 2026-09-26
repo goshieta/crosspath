@@ -8,7 +8,7 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
 
 import com.example.crosspath.R;
-import com.example.crosspath.ui.sample.SampleData;
+import com.example.crosspath.ui.data.UiData;
 import com.google.android.material.navigation.NavigationBarView;
 
 /**
@@ -90,8 +90,7 @@ public final class BottomTabs {
         if (menuItemId == TAB_NOTIFICATIONS) {
             return Screen.SC06;
         }
-        // TODO(段階5: ACTIVE 期間の実データ判定に置換)
-        return SampleData.HAS_ACTIVE_SESSION ? Screen.SC04 : Screen.SC02;
+        return UiData.isTimerActive() ? Screen.SC04 : Screen.SC02;
     }
 
     /** 画面に対応する Fragment を生成する。 */
