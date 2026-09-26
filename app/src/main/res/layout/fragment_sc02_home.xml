@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:paddingLeft="@dimen/screen_margin_horizontal"
+    android:paddingRight="@dimen/screen_margin_horizontal">
+
+    <!-- C4 で完全なレイアウトに置き換える -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/sc02_title"
+        style="@style/TextAppearance.Material3.TitleLarge" />
+
+    <!-- TODO(段階2): SC02 完全実装 -->
+
+</LinearLayout>

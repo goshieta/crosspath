@@ -11,6 +11,8 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.fragment.app.FragmentContainerView;
 
+import com.example.crosspath.ui.Sc01RegistrationFragment;
+
 /**
  * 単一 Activity。仕様: 詳細設計書 v0.8 第11章
  *
@@ -35,7 +37,12 @@ public class MainActivity extends AppCompatActivity {
             return insets;
         });
 
-        // TODO(段階2): 初回起動時に本人IDの有無を確認し SC01 か SC02 を表示
+        // 初回起動時は SC01 を表示（TODO(段階2): 本人ID有無により SC01 か SC02 かを判定）
+        if (savedInstanceState == null) {
+            getSupportFragmentManager().beginTransaction()
+                    .replace(R.id.fragment_container, new Sc01RegistrationFragment())
+                    .commit();
+        }
     }
 
     /**

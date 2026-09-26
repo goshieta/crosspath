@@ -1,0 +1,67 @@
+package com.example.crosspath.ui.sample;
+
+import java.util.Arrays;
+import java.util.List;
+
+/**
+ * 表示確認用の固定データ置き場。仕様: 詳細設計書 v0.8 §11
+ *
+ * すべての項目に TODO コメントを付し、実データへの置き換えが明示的に追跡できるようにする。
+ * 画面間で状態を持ち回らず、各画面はこの固定値を表示するだけ。
+ */
+public class SampleData {
+
+    /** 自分の個人ID（24bit有効範囲内の例）。TODO(段階2: 登録APIの返値に置換) */
+    public static final String MY_USER_ID = "1234567";
+
+    /** 自分の名前。TODO(段階2: 登録APIの返値に置換) */
+    public static final String MY_NAME = "山田太郎";
+
+    /** 通知対象者のサンプル。TODO(段階2: Room の WatchTarget に置換) */
+    public static final List<SampleWatchTarget> WATCH_TARGETS = Arrays.asList(
+            new SampleWatchTarget("7654321", "佐藤花子", true),
+            new SampleWatchTarget("1111111", "鈴木一郎", false),
+            new SampleWatchTarget("2222222", "田中正義", true),
+            new SampleWatchTarget("3333333", "John Smith", false),
+            new SampleWatchTarget("9999999", "東京都港区赤坂九丁目七十九番地", true) // 長い名前
+    );
+
+    /** 都道府県と市町村のサンプル。TODO(段階2: 同梱マスターデータに置換) */
+    public static final List<SamplePrefecture> PREFECTURES = Arrays.asList(
+            new SamplePrefecture("福岡県", Arrays.asList("飯塚市", "福岡市", "北九州市", "久留米市")),
+            new SamplePrefecture("広島県", Arrays.asList("東広島市", "広島市", "呉市", "尾道市")),
+            new SamplePrefecture("東京都", Arrays.asList("千代田区", "新宿区", "渋谷区", "港区"))
+    );
+
+    /** 通信状態ダミー。TODO(段階5: BLE の実状態に置換) */
+    public static final String DUMMY_COMM_STATE = "未開始";
+
+    private SampleData() {
+        // インスタンス化禁止
+    }
+
+    /** 通知対象者サンプルの1行 */
+    public static class SampleWatchTarget {
+        public final String userId;
+        public final String displayName;
+        /** 今回のACTIVE期間での受信状態。TODO(段階2: SafetyRecord の照合に置換) */
+        public final boolean receivedThisSession;
+
+        public SampleWatchTarget(String userId, String displayName, boolean receivedThisSession) {
+            this.userId = userId;
+            this.displayName = displayName;
+            this.receivedThisSession = receivedThisSession;
+        }
+    }
+
+    /** 都道府県サンプル */
+    public static class SamplePrefecture {
+        public final String name;
+        public final List<String> municipalities;
+
+        public SamplePrefecture(String name, List<String> municipalities) {
+            this.name = name;
+            this.municipalities = municipalities;
+        }
+    }
+}
