@@ -50,7 +50,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/element_margin_medium"
         android:text="@string/action_register_watch_target"
-        style="@style/Widget.Material3.Button.TonalButton" />
+        style="@style/Widget.Material3.Button" />
 
     <!-- 結果表示 -->
     <TextView

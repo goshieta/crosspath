@@ -72,7 +72,7 @@
             android:layout_marginBottom="@dimen/section_margin_large"
             android:enabled="false"
             android:text="@string/action_confirm"
-            style="@style/Widget.Material3.Button.TonalButton" />
+            style="@style/Widget.Material3.Button" />
 
     </LinearLayout>
 </ScrollView>
