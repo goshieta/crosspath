@@ -37,6 +37,8 @@
     <string name="sc04_comm_inactive">未開始</string>
     <string name="sc04_no_watch_targets">通知対象者が登録されていません</string>
     <string name="sc04_block_clock_uncertain">端末の時刻を確認できないため通信を停止しました</string>
+    <string name="sc04_comm_blocked">通信できません</string>
+    <string name="sc04_block_comm">通信機能が使えないため、生存情報を送受信できません（72時間は進みます）</string>
     <!-- SC05 -->
     <string name="sc05_title">通知対象者管理</string>
     <string name="sc05_hint_target_id">対象者の個人ID</string>

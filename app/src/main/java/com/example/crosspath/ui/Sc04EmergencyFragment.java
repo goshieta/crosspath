@@ -20,11 +20,11 @@ import com.example.crosspath.R;
 import com.example.crosspath.data.SessionStatus;
 import com.example.crosspath.data.WatchStatus;
 import com.example.crosspath.ui.data.UiData;
-import com.example.crosspath.ui.theme.NavTransitions;
 import com.example.crosspath.ui.theme.ScreenThemes;
 import com.example.crosspath.ui.theme.StatusBadge;
 import com.example.crosspath.ui.theme.ViewAnims;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
@@ -47,6 +47,10 @@ public class Sc04EmergencyFragment extends Fragment {
     /** カウントダウン表示用のスナップショット（remainingMillis を元に1秒ずつ減らす）。期限判定には使わない。 */
     private long remainingForDisplay;
     private boolean countdownRunning;
+    /** 通知対象者一覧（現在の通信期間の受信状態）。 */
+    private List<WatchStatus> watchStatuses;
+    /** 通知対象者が1件以上登録されているか（一覧表示の可否は Sc04ViewState が決める）。 */
+    private boolean hasTargets;
 
     private final Runnable countdownTick = new Runnable() {
         @Override
@@ -58,29 +62,20 @@ public class Sc04EmergencyFragment extends Fragment {
                 stopCountdown();
                 UiData.checkSession(status -> {
                     if (!isAdded() || getView() == null) return;
-                    if (status.state == SessionStatus.State.ENDED
-                            || status.state == SessionStatus.State.NO_SESSION
-                            || status.state == SessionStatus.State.EXPIRED) {
-                        // SC02（ホーム）へ Z軸の階層遷移で遷移
-                        Fragment target = new Sc02HomeFragment();
-                        NavTransitions.hierarchy(Sc04EmergencyFragment.this, target, true);
-                        requireActivity().getSupportFragmentManager()
-                                .beginTransaction()
-                                .replace(R.id.fragment_container, target)
-                                .commit();
+                    // Activity（遷移の唯一の実行者）にも状態を通知する
+                    if (getActivity() instanceof MainActivity) {
+                        ((MainActivity) getActivity()).onSessionStatus(status);
+                    }
+                    if (!ScreenPolicy.isActivePeriod(status.state)) {
+                        // 期限終了: checkAndEndExpiredSession 済みの状態なので SC02 へ（§11.5）
+                        ((NavHost) requireActivity()).navigatePush(Screen.SC02);
                     } else {
-                        // まだ ACTIVE（時刻のずれなど）なら残り時間で再開
+                        // 期間は続いている（時刻のずれ等）→ 残り時間で再開
                         render(status);
                     }
                 }, error -> {
                     if (!isAdded() || getView() == null) return;
-                    // エラー時は SC02 へ遷移
-                    Fragment target = new Sc02HomeFragment();
-                    NavTransitions.hierarchy(Sc04EmergencyFragment.this, target, true);
-                    requireActivity().getSupportFragmentManager()
-                            .beginTransaction()
-                            .replace(R.id.fragment_container, target)
-                            .commit();
+                    ((NavHost) requireActivity()).navigatePush(Screen.SC02);
                 });
                 return;
             }
@@ -168,129 +163,97 @@ public class Sc04EmergencyFragment extends Fragment {
             }
             if (!isAdded() || getView() == null) return;
             sessionStatus = status;
-            render(status);
-            // セッション取得後、受信状態も読み込む
+            // 先に受信状態を読み込み、hasTargets を反映した状態で表示する
             loadWatchStatuses();
+            render(status);
         }, error -> {
             if (!isAdded() || getView() == null) return;
             sessionStatus = null;
-            render(null);
             loadWatchStatuses();
+            render(null);
         });
     }
 
-    /** 通信状態テキストとカウントダウンの表示を SessionStatus に応じて更新する。 */
+    /**
+     * セッション状態を保存し、表示内容を更新する。
+     * 仕様 §11.5 / §11.8: 通信不能でも72時間は進み、現在の期間がある限り対象者一覧を表示する。
+     */
     private void render(SessionStatus status) {
         if (!isAdded() || getView() == null) return;
+        sessionStatus = status;
+        applyViewState();
+    }
 
-        if (status == null) {
-            // null（エラー時）も「期間なし」扱い
+    /** Sc04ViewState の値だけを使って View を更新する（表示判断は Sc04ViewState に集約）。 */
+    private void applyViewState() {
+        if (!isAdded() || getView() == null) return;
+
+        SessionStatus status = sessionStatus;
+        SessionStatus.State state = status == null ? null : status.state;
+        // SessionStatus は relayEnabled を公開しないが、ACTIVE のとき canCommunicate == relayEnabled。
+        // CLOCK_UNCERTAIN では relayEnabled は判定に使われない（Sc04ViewState の規則）。
+        boolean relayEnabled = status != null && status.canCommunicate;
+        Sc04ViewState vs = Sc04ViewState.of(state, relayEnabled, hasTargets);
+
+        // カウントダウン（§11.10: 秒単位の更新は SC04 表示中のみ。期限判定はデータ層の責務）
+        if (vs.countdownRunning && status != null) {
+            if (!countdownRunning) {
+                remainingForDisplay = status.remainingMillis;
+                startCountdown();
+            }
+        } else {
             stopCountdown();
             countdownText.setText(getString(R.string.sc04_countdown_label,
                     getString(R.string.sc04_countdown_default)));
-            commStatusText.setText(String.format(Locale.JAPAN,
-                    getString(R.string.sc04_comm_status),
-                    getString(R.string.sc04_comm_inactive)));
-            blockReasonText.setVisibility(View.GONE);
-            noSessionText.setText(R.string.state_no_session);
-            noSessionText.setVisibility(View.VISIBLE);
-            safetyList.setVisibility(View.GONE);
-            return;
         }
 
-        switch (status.state) {
-            case ACTIVE:
-                if (status.canCommunicate) {
-                    // ACTIVE かつ canCommunicate: カウントダウン開始
-                    commStatusText.setText(String.format(Locale.JAPAN,
-                            getString(R.string.sc04_comm_status),
-                            getString(R.string.sc04_comm_active)));
-                    remainingForDisplay = status.remainingMillis;
-                    startCountdown();
-                    blockReasonText.setVisibility(View.GONE);
-                    noSessionText.setVisibility(View.GONE);
-                } else {
-                    // ACTIVE だが relayEnabled = false（通常は起こらないが念のため）
-                    stopCountdown();
-                    countdownText.setText(getString(R.string.sc04_countdown_label,
-                            getString(R.string.sc04_countdown_default)));
-                    commStatusText.setText(String.format(Locale.JAPAN,
-                            getString(R.string.sc04_comm_status),
-                            getString(R.string.sc04_comm_inactive)));
-                    blockReasonText.setVisibility(View.GONE);
-                    noSessionText.setText(R.string.state_no_session);
-                    noSessionText.setVisibility(View.VISIBLE);
-                    safetyList.setVisibility(View.GONE);
-                }
-                break;
-            case ENDED:
-            case NO_SESSION:
-            case EXPIRED:
-                stopCountdown();
-                countdownText.setText(getString(R.string.sc04_countdown_label,
-                        getString(R.string.sc04_countdown_default)));
-                commStatusText.setText(String.format(Locale.JAPAN,
-                        getString(R.string.sc04_comm_status),
-                        getString(R.string.sc04_comm_inactive)));
-                blockReasonText.setVisibility(View.GONE);
-                noSessionText.setText(R.string.state_no_session);
-                noSessionText.setVisibility(View.VISIBLE);
-                safetyList.setVisibility(View.GONE);
-                break;
-            case CLOCK_UNCERTAIN:
-                stopCountdown();
-                countdownText.setText(getString(R.string.sc04_countdown_label,
-                        getString(R.string.sc04_countdown_default)));
-                commStatusText.setText(String.format(Locale.JAPAN,
-                        getString(R.string.sc04_comm_status),
-                        getString(R.string.sc04_comm_inactive)));
-                blockReasonText.setVisibility(View.VISIBLE);
-                blockReasonText.setText(R.string.sc04_block_clock_uncertain);
-                noSessionText.setText(R.string.state_no_session);
-                noSessionText.setVisibility(View.VISIBLE);
-                safetyList.setVisibility(View.GONE);
-                break;
+        // 通信状態（§11.5: 通信が動いていると誤表示しない）
+        commStatusText.setText(String.format(Locale.JAPAN,
+                getString(R.string.sc04_comm_status),
+                getString(vs.commStatusRes)));
+
+        // 通信不能理由（Bluetooth無効・権限不足・時計不確実など）
+        if (vs.blockReasonRes != 0) {
+            blockReasonText.setText(getString(vs.blockReasonRes));
+            blockReasonText.setVisibility(View.VISIBLE);
+        } else {
+            blockReasonText.setVisibility(View.GONE);
+        }
+
+        // 「現在の通信期間なし」「通知対象者が登録されていません」
+        if (vs.emptyTextRes != 0) {
+            noSessionText.setText(getString(vs.emptyTextRes));
+            noSessionText.setVisibility(View.VISIBLE);
+        } else {
+            noSessionText.setVisibility(View.GONE);
+        }
+
+        // 〇／ー一覧: 現在の期間があり、対象者が登録されているときだけ表示する。
+        // 通信不能（relayEnabled == false）でも期間が続いていれば一覧を出す。
+        if (vs.listVisible) {
+            safetyList.setAdapter(new SafetyStatusAdapter(watchStatuses));
+            safetyList.setVisibility(View.VISIBLE);
+        } else {
+            safetyList.setVisibility(View.GONE);
         }
     }
 
-    /** 受信状態一覧を UiData 経由で読み込む（checkSession の後に呼ばれる）。 */
+    /** 受信状態一覧を UiData 経由で読み込む。表示可否は Sc04ViewState が決める。 */
     private void loadWatchStatuses() {
         if (!isAdded()) return;
         UiData.whenReady(repo ->
             UiData.onResult(repo.currentWatchStatuses(), statuses -> {
                 if (!isAdded() || getView() == null) return;
-                if (statuses == null || statuses.isEmpty()) {
-                    // 通知対象者が未登録
-                    noSessionText.setText(R.string.sc04_no_watch_targets);
-                    noSessionText.setVisibility(View.VISIBLE);
-                    safetyList.setVisibility(View.GONE);
-                } else if (allNoActiveSession(statuses)) {
-                    // 全要素 NO_ACTIVE_SESSION → 現在の通信期間なし
-                    noSessionText.setText(R.string.state_no_session);
-                    noSessionText.setVisibility(View.VISIBLE);
-                    safetyList.setVisibility(View.GONE);
-                } else {
-                    noSessionText.setVisibility(View.GONE);
-                    SafetyStatusAdapter adapter = new SafetyStatusAdapter(statuses);
-                    safetyList.setAdapter(adapter);
-                    safetyList.setVisibility(View.VISIBLE);
-                }
+                watchStatuses = statuses == null ? null : new ArrayList<>(statuses);
+                hasTargets = watchStatuses != null && !watchStatuses.isEmpty();
+                applyViewState();
             }, error -> {
                 if (!isAdded() || getView() == null) return;
-                noSessionText.setText(R.string.state_no_session);
-                noSessionText.setVisibility(View.VISIBLE);
-                safetyList.setVisibility(View.GONE);
+                watchStatuses = null;
+                hasTargets = false;
+                applyViewState();
             })
         );
-    }
-
-    private static boolean allNoActiveSession(List<WatchStatus> statuses) {
-        for (WatchStatus ws : statuses) {
-            if (ws.state != WatchStatus.State.NO_ACTIVE_SESSION) {
-                return false;
-            }
-        }
-        return true;
     }
 
     /** カウントダウンを開始する（既に動いていれば二重起動しない）。 */

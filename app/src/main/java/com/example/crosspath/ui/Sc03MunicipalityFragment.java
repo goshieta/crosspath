@@ -17,7 +17,6 @@ import com.example.crosspath.R;
 import com.example.crosspath.data.KyushuMunicipalities;
 import com.example.crosspath.ui.data.UiData;
 import com.example.crosspath.ui.data.UserProfile;
-import com.example.crosspath.ui.theme.NavTransitions;
 import com.example.crosspath.ui.theme.ScreenThemes;
 import com.google.android.material.textfield.MaterialAutoCompleteTextView;
 import com.google.android.material.textfield.TextInputLayout;
@@ -152,12 +151,7 @@ public class Sc03MunicipalityFragment extends Fragment {
                     if (!isAdded()) {
                         return;
                     }
-                    Sc04EmergencyFragment target = new Sc04EmergencyFragment();
-                    NavTransitions.hierarchy(this, target, true);
-                    getParentFragmentManager().beginTransaction()
-                            .replace(R.id.fragment_container, target)
-                            .addToBackStack(null)
-                            .commit();
+                    ((NavHost) requireActivity()).navigatePush(Screen.SC04);
                 },
                 error -> {
                     if (!isAdded()) {

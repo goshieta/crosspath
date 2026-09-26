@@ -90,23 +90,30 @@ public final class BottomTabs {
         if (menuItemId == TAB_NOTIFICATIONS) {
             return Screen.SC06;
         }
-        return UiData.isTimerActive() ? Screen.SC04 : Screen.SC02;
+        return UiData.isActivePeriod() ? Screen.SC04 : Screen.SC02;
     }
 
-    /** 画面に対応する Fragment を生成する。 */
+    /**
+     * 画面に対応する Fragment を生成する。画面の実体を作る唯一の場所
+     * （Navigator はこの 1 メソッドだけを使って Fragment を入れ替える）。
+     */
     @NonNull
     public static Fragment newFragmentFor(@NonNull Screen screen) {
-        if (screen == Screen.SC04) {
-            return new Sc04EmergencyFragment();
+        switch (screen) {
+            case SC01:
+                return new Sc01RegistrationFragment();
+            case SC03:
+                return new Sc03MunicipalityFragment();
+            case SC04:
+                return new Sc04EmergencyFragment();
+            case SC05:
+                return new Sc05WatchTargetFragment();
+            case SC06:
+                return new Sc06NotificationHistoryFragment();
+            case SC02:
+            default:
+                return new Sc02HomeFragment();
         }
-        if (screen == Screen.SC05) {
-            return new Sc05WatchTargetFragment();
-        }
-        if (screen == Screen.SC06) {
-            return new Sc06NotificationHistoryFragment();
-        }
-        // SC02 を含む未知の Screen はホームにフォールバック。
-        return new Sc02HomeFragment();
     }
 
     /** タブバーの実体（NavigationBarView）を探す。 */

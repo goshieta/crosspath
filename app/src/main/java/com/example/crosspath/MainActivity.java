@@ -13,6 +13,7 @@ import android.view.Window;
 import android.widget.FrameLayout;
 
 import androidx.activity.EdgeToEdge;
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -20,18 +21,19 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
-import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentContainerView;
 
 import com.example.crosspath.data.SessionStatus;
 import com.example.crosspath.ui.BottomTabs;
+import com.example.crosspath.ui.NavHost;
+import com.example.crosspath.ui.Navigator;
 import com.example.crosspath.ui.Screen;
+import com.example.crosspath.ui.ScreenPolicy;
 import com.example.crosspath.ui.Sc01RegistrationFragment;
 import com.example.crosspath.ui.Sc02HomeFragment;
 import com.example.crosspath.ui.Sc04EmergencyFragment;
 import com.example.crosspath.ui.data.UiData;
 import com.example.crosspath.ui.data.UserProfile;
-import com.example.crosspath.ui.theme.NavTransitions;
 import com.example.crosspath.ui.theme.ScreenThemes;
 import com.google.android.material.color.MaterialColors;
 
@@ -42,8 +44,11 @@ import com.google.android.material.color.MaterialColors;
  * Activity 側（bottom_tabs_container）に置いた「ページを切り替えるコンポーネント」であり、
  * ページ遷移アニメーションの影響を受けない（揺れない）うえ、背景は画面全幅に広がる。
  * タブバーのテーマは表示中の画面のテーマ（緊急時モード時はダーク）に合わせて作り直す。
+ *
+ * 画面遷移は {@link Navigator} に一元化する。現在画面の唯一の保持者は Navigator であり、
+ * この Activity は {@link NavHost} として遷移要求を受け付ける。
  */
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements NavHost {
 
     private FragmentContainerView fragmentContainer;
     private FrameLayout tabBarContainer;
@@ -54,14 +59,25 @@ public class MainActivity extends AppCompatActivity {
     /** タブバーに現在適用しているテーマ（ダークなら true）。 */
     private boolean tabBarIsDark;
 
-    /** 現在表示中の画面（タブの選択状態とコンテンツ余白の計算に使う）。 */
-    private Screen currentScreen;
+    /** 現在画面の唯一の保持者。画面遷移を一元管理する。 */
+    private Navigator navigator;
 
-    /** 緊急時モード（SessionStatus.canCommunicate）。MainActivity が唯一の保持者。 */
+    /** 緊急時モード（未満了の期間がある）。MainActivity が唯一の保持者。 */
     private boolean emergencyMode;
 
     /** 起動時の初期画面選定が未完了であることを示すフラグ。 */
     private boolean pendingInitialNavigation;
+
+    /** システムの戻る操作。SC03 のときだけ有効化して SC02 へ戻す。 */
+    private final OnBackPressedCallback backCallback = new OnBackPressedCallback(false) {
+        @Override
+        public void handleOnBackPressed() {
+            Screen target = ScreenPolicy.backTarget(navigator.current());
+            if (target != null) {
+                navigator.navigateBack(target);
+            }
+        }
+    };
 
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
@@ -79,6 +95,10 @@ public class MainActivity extends AppCompatActivity {
 
         fragmentContainer = findViewById(R.id.fragment_container);
         tabBarContainer = findViewById(R.id.bottom_tabs_container);
+
+        navigator = new Navigator(getSupportFragmentManager(), R.id.fragment_container, this::applyScreenTheme);
+        getOnBackPressedDispatcher().addCallback(this, backCallback);
+        backCallback.setEnabled(false);
 
         ViewCompat.setOnApplyWindowInsetsListener(fragmentContainer, (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -119,40 +139,58 @@ public class MainActivity extends AppCompatActivity {
         return emergencyMode;
     }
 
+    // ---- NavHost ----
+
+    @Override
+    public void navigatePush(@NonNull Screen target) {
+        navigator.navigatePush(target);
+        updateBackEnabled();
+    }
+
+    @Override
+    public void navigateBack(@NonNull Screen target) {
+        navigator.navigateBack(target);
+        updateBackEnabled();
+    }
+
+    @Override
+    public void navigateTab(@NonNull Screen target) {
+        navigator.navigateTab(target);
+        updateBackEnabled();
+    }
+
+    /** 現在画面に応じて、システム戻るコールバックの有効/無効を更新する。 */
+    private void updateBackEnabled() {
+        backCallback.setEnabled(ScreenPolicy.backTarget(navigator.current()) != null);
+    }
+
     /**
      * セッション状態が変化したときのコールバック。フラグメントからも呼ばれる。
      * 緊急時モードの変化に応じてテーマ再適用・画面遷移・Fragment 再生成を行う。
      */
     public void onSessionStatus(@Nullable SessionStatus status) {
-        boolean active = status != null && status.canCommunicate;
+        SessionStatus.State state = status == null ? null : status.state;
+        boolean emergency = ScreenPolicy.emergencyMode(state);
 
         if (pendingInitialNavigation) {
-            emergencyMode = active;
+            emergencyMode = emergency;
             showInitialScreen();
             return;
         }
 
-        if (active == emergencyMode) return;
-        if (currentScreen == null) return;
+        Screen current = navigator.current();
+        if (current == null) return;
 
-        boolean wasEmergency = emergencyMode;
-        emergencyMode = active;
+        boolean themeChanged = emergency != emergencyMode;
+        emergencyMode = emergency;
 
-        applyScreenTheme(currentScreen);
-
-        Screen target = currentScreen;
-        if (active && currentScreen == Screen.SC02) {
-            target = Screen.SC04;
-        } else if (!active && currentScreen == Screen.SC04) {
-            target = Screen.SC02;
+        Screen target = ScreenPolicy.screenFor(current, state);
+        if (target != current) {
+            navigator.navigatePush(target);   // 期限終了なら SC02
+        } else if (themeChanged) {
+            navigator.reapplyTheme();          // テーマが変わったら再適用（必要なら作り直し）
         }
-
-        if (target != currentScreen) {
-            replaceTo(target, true);
-        } else if (ScreenThemes.isEmergencyVariant(currentScreen, active)
-                != ScreenThemes.isEmergencyVariant(currentScreen, wasEmergency)) {
-            recreateCurrentFragment();
-        }
+        updateBackEnabled();
     }
 
     /**
@@ -162,49 +200,11 @@ public class MainActivity extends AppCompatActivity {
         pendingInitialNavigation = false;
         mainHandler.removeCallbacks(fallbackRunnable);
 
-        Fragment initialFragment;
-        if (!UserProfile.isRegistered(this)) {
-            initialFragment = new Sc01RegistrationFragment();
-        } else if (emergencyMode) {
-            initialFragment = new Sc04EmergencyFragment();
-        } else {
-            initialFragment = new Sc02HomeFragment();
-        }
-
-        getSupportFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, initialFragment)
-                .commit();
-    }
-
-    /**
-     * 現在の Fragment を新しいテーマで作り直す（SC05/SC06 などテーマが切り替わる画面用）。
-     */
-    private void recreateCurrentFragment() {
-        if (currentScreen == null) return;
-        Fragment current = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
-        Fragment next = BottomTabs.newFragmentFor(currentScreen);
-        if (current != null && current.getClass() == next.getClass()) {
-            getSupportFragmentManager().beginTransaction()
-                    .replace(R.id.fragment_container, next)
-                    .commit();
-        }
-    }
-
-    /**
-     * 画面遷移（階層遷移アニメーション付き）。
-     */
-    private void replaceTo(@NonNull Screen target, boolean forward) {
-        Fragment current = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
-        Fragment next = BottomTabs.newFragmentFor(target);
-        if (current != null && current.getClass() == next.getClass()) {
-            return; // 二重遷移防止
-        }
-        if (current != null && currentScreen != null) {
-            NavTransitions.hierarchy(current, next, forward);
-        }
-        getSupportFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, next)
-                .commit();
+        SessionStatus last = UiData.lastSessionStatus();
+        SessionStatus.State state = last == null ? null : last.state;
+        Screen target = ScreenPolicy.initialScreen(UserProfile.isRegistered(this), state);
+        navigator.showInitial(target);
+        updateBackEnabled();
     }
 
     /**
@@ -231,8 +231,6 @@ public class MainActivity extends AppCompatActivity {
      */
     public void applyScreenTheme(Screen screen) {
         if (screen == null) return;
-
-        currentScreen = screen;
 
         // 画面のテーマ Context から colorBackground（=colorSurface）を解決
         Context themedContext = new ContextThemeWrapper(this,
@@ -286,7 +284,8 @@ public class MainActivity extends AppCompatActivity {
      * コンテンツの余白。タブバーを表示している画面では下余白をタブバーに任せる。
      */
     private void updateContentPadding() {
-        boolean showTabs = currentScreen != null && BottomTabs.showsTabs(currentScreen);
+        Screen current = navigator.current();
+        boolean showTabs = current != null && BottomTabs.showsTabs(current);
         fragmentContainer.setPadding(insetLeft, insetTop, insetRight, showTabs ? 0 : insetBottom);
     }
 
@@ -294,17 +293,7 @@ public class MainActivity extends AppCompatActivity {
      * タブが選ばれたときの画面遷移。タブ間は同階層なので X 軸の遷移を使う。
      */
     private void onTabSelected(@NonNull Screen target) {
-        if (target == currentScreen) {
-            return;
-        }
-        Fragment current = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
-        Fragment next = BottomTabs.newFragmentFor(target);
-        if (current != null && currentScreen != null) {
-            boolean forward = BottomTabs.tabIndex(target) > BottomTabs.tabIndex(currentScreen);
-            NavTransitions.tab(current, next, forward);
-        }
-        getSupportFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, next)
-                .commit();
+        navigator.navigateTab(target);
+        updateBackEnabled();
     }
 }

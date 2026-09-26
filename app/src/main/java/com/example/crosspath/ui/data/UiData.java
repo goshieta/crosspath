@@ -10,6 +10,7 @@ import com.example.crosspath.data.KyushuMunicipalities;
 import com.example.crosspath.data.SafetyRepository;
 import com.example.crosspath.data.SessionStatus;
 import com.example.crosspath.data.SessionStopHandler;
+import com.example.crosspath.ui.ScreenPolicy;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -35,7 +36,7 @@ public final class UiData {
     private static volatile boolean initialized;
     /** DB 用の単一スレッド Executor。init で1度だけ作り、whenReady でも使い回す（スレッドを増やさない）。 */
     private static volatile Executor ioExecutor;
-    private static final AtomicBoolean timerActive = new AtomicBoolean(false);
+    private static final AtomicBoolean activePeriod = new AtomicBoolean(false);
     private static final Handler mainHandler = new Handler(Looper.getMainLooper());
     private static final Object lock = new Object();
     private static final List<Consumer<SafetyRepository>> pendingCallbacks = new ArrayList<>();
@@ -143,7 +144,7 @@ public final class UiData {
         }
         repository.checkAndEndExpiredSession().thenAccept(status -> {
             lastSessionStatus = status;
-            timerActive.set(status.canCommunicate);
+            activePeriod.set(ScreenPolicy.isActivePeriod(status.state));
             mainHandler.post(() -> {
                 if (onStatus != null) onStatus.accept(status);
             });
@@ -167,9 +168,12 @@ public final class UiData {
         checkSession(status -> {}, error -> {});
     }
 
-    /** キャッシュされたタイマー状態を同期・即時で返す。 */
-    public static boolean isTimerActive() {
-        return timerActive.get();
+    /**
+     * §11.1 の「タイマー作動中」＝未満了の期間がある（ACTIVE または CLOCK_UNCERTAIN）。
+     * 通信可否（canCommunicate）ではない。
+     */
+    public static boolean isActivePeriod() {
+        return activePeriod.get();
     }
 
     private UiData() {}

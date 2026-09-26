@@ -194,11 +194,36 @@ UI は DB を直接触らず、`ui/data/UiData.java` を通して `data/SafetyRe
 - 期限判定は `checkAndEndExpiredSession()` 一本化。カウントダウンは `remainingMillis` の表示スナップショットであり、期限判定はデータ層が行う。
 - `SessionStopHandler` は現状ログとID記録のみのプレースホルダで、BLE/Service の実停止処理は未実装。
 
+### 緊急時モードと画面遷移（§11.1 / §11.5 / §11.8）
+
+- **緊急時モード = 「未満了の期間がある」（`SessionStatus.State.ACTIVE` または `CLOCK_UNCERTAIN`）**。
+  `SessionStatus.canCommunicate`（ACTIVE かつ relayEnabled）ではない。通信不能・時計不確実は
+  「72時間の期間が終了した」ことではないため、画面を SC02 へ戻さない（§11.5）。
+- 判断は `ui/ScreenPolicy` に集約した純粋関数（`isActivePeriod` / `emergencyMode` / `commState` /
+  `screenFor` / `initialScreen` / `backTarget` / `commStatusRes` / `blockReasonRes`）。
+  `SessionStatus.State` と `relayEnabled` だけを入力にするので JVM のユニットテストで検証できる。
+- SC04 の表示内容（カウントダウン可否・通信状態・通信不能理由・一覧の有無・代替文言）は
+  `ui/Sc04ViewState` が決める。通信不能（`relayEnabled == false`）でも期間が続いていれば
+  対象者一覧（〇／ー）とカウントダウンを表示し、理由文だけを併記する（§11.5）。
+  `CLOCK_UNCERTAIN` は残り時間が確定できないためカウントダウンを止め、時計確認を明示する。
+- 期限終了（`EXPIRED`／`ENDED`／`NO_SESSION`）は `UiData.checkSession()` が
+  `checkAndEndExpiredSession()`（終了＋レコード削除を同一トランザクション）を経た状態を返すため、
+  それを受けて SC02 へ遷移する（削除処理完了後に画面が戻る。UI 側で期限処理はしない）。
+- 画面遷移は `ui/Navigator`（`MainActivity` が `ui/NavHost` を実装）に一元化した。フラグメントは
+  `((NavHost) requireActivity()).navigatePush/navigateBack/navigateTab(...)` で依頼するだけで、
+  自分で `FragmentTransaction` を実行しない。**`addToBackStack` は使わない**（階層は線形フロー）ため、
+  戻る操作で古い SC03・古い SC04（期限終了後）へ戻る経路が存在しない。
+  現在画面の唯一の保持者も `Navigator` で、遷移と同時に更新する。
+- システムの戻る操作は `ScreenPolicy.backTarget()` に従う（SC03 で確定前に戻る → SC02。
+  それ以外の画面は仕様に規定が無いため既定動作＝アプリ終了）。
+
 ## 未実装の範囲
 
 以下は **実装していない**（TODO コメントを残している）：
 
-- BLE/GATT 通信（SC04 の通信状態表示は「通信期間中／未開始」の段階表示）
+- BLE/GATT 通信（SC04 の通信状態表示は「通信期間中／通信できません／未開始」の段階表示。
+  通信不能理由の実検知は BLE・権限・Foreground Service の実装後）
+- 個人ID のサーバ発行（現状は端末内生成のみ）
 - Foreground Service
 - Android 通知の発行（`NotificationHistory` の PENDING/POSTED/BLOCKED を使う Dispatcher）
 - 登録 API（サーバ側の本人登録）

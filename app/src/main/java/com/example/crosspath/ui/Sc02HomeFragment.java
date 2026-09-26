@@ -19,7 +19,6 @@ import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
 import com.example.crosspath.ui.data.UiData;
 import com.example.crosspath.ui.data.UserProfile;
-import com.example.crosspath.ui.theme.NavTransitions;
 import com.example.crosspath.ui.theme.ScreenThemes;
 import com.example.crosspath.ui.theme.ViewAnims;
 import com.google.android.material.card.MaterialCardView;
@@ -77,17 +76,13 @@ public class Sc02HomeFragment extends Fragment {
 
     private void onSurvivalClicked() {
         // 仕様 §11.1: SC02 → 生存ボタン → ACTIVE 期間有無で分岐
-        Fragment target;
-        if (UiData.isTimerActive()) {
-            target = new Sc04EmergencyFragment();
+        Screen target;
+        if (UiData.isActivePeriod()) {
+            target = Screen.SC04;
         } else {
-            target = new Sc03MunicipalityFragment();
+            target = Screen.SC03;
         }
-        NavTransitions.hierarchy(this, target, true);
-        getParentFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, target)
-                .addToBackStack(null)
-                .commit();
+        ((NavHost) requireActivity()).navigatePush(target);
     }
 
     private void onCopyClicked() {
