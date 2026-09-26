@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# 開発支援ディレクトリ（実装指示書・作業ログ・検証スクリプト）。リポジトリには含めない
+/.agent/
