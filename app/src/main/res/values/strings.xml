@@ -44,6 +44,8 @@
     <string name="sc05_error_invalid_id">IDの形式が正しくありません</string>
     <string name="sc05_error_name_required">名前は必須です</string>
     <string name="sc05_register_success">登録しました</string>
+    <string name="sc05_error_register_failed">登録に失敗しました</string>
+    <string name="sc05_error_delete_failed">削除に失敗しました</string>
     <!-- SC06 -->
     <string name="sc06_title">通知履歴</string>
     <string name="sc04_countdown_default">72時間00分00秒</string>

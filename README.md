@@ -39,7 +39,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 ## 画面構成
 
 プロジェクトは仕様書 v0.8 第11章に基づき、6つの画面（SC01〜SC06）で構成される。
-**現在の実装は UI のみ**（BLE 通信・データ永続化・Service・通知は未実装）。
+UI とデータ層（Room）は接続済み。BLE 通信・Foreground Service・Android 通知の発行は未実装。
 
 | 画面ID | 画面名 | Fragment クラス | レイアウトファイル |
 |---|---|---|---|
@@ -53,7 +53,14 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 下部タブバー（ホーム／通知対象者／通知画面）は **SC02・SC04・SC05・SC06 で共通**。
 登録フローの SC01（初回登録）・SC03（市町村選択）には表示しない。
 タブの実装は `res/layout/include_bottom_tabs.xml` ＋ `res/menu/menu_bottom_tabs.xml` ＋ `ui/BottomTabs.java`。
-タブバーでホームを選ぶとタイマー作動中は SC04、それ以外は SC02 を表示する。
+
+タブバーは **Activity 直下**（`activity_main.xml` の `bottom_tabs_container`）に置き、`MainActivity` が
+唯一の保持者として表示・テーマ・選択状態を管理する（ページ＝Fragment の中には置かない）。
+そのためページ遷移アニメーションでは動かず、背景は画面全幅（端から端・下端まで）に広がる。
+SC04 ではタブバーもダークテーマで作り直される。
+
+タブバーでホームを選ぶと、タイマー作動中は SC04、それ以外は SC02 を表示する
+（判定は `UiData.isTimerActive()` = `ActiveSession` の実データ）。
 
 ### 補助ファイル
 
@@ -64,7 +71,8 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 | 遷移ヘルパ | `ui/theme/NavTransitions.java` |
 | 出現アニメーションヘルパ | `ui/theme/ViewAnims.java` |
 | 下部タブバー | `ui/BottomTabs.java`・`res/layout/include_bottom_tabs.xml`・`res/menu/menu_bottom_tabs.xml` |
-| 暫定サンプルデータ | `ui/sample/SampleData.java` |
+| データアクセス口（UI から DB への唯一の経路） | `ui/data/UiData.java` |
+| 本人プロファイル（名前・個人IDのローカル保存） | `ui/data/UserProfile.java` |
 | 共通リソース（色） | `res/values/colors.xml` |
 | 共通リソース（テーマ） | `res/values/themes.xml` |
 | 共通リソース（寸法） | `res/values/dimens.xml` |
@@ -158,14 +166,30 @@ Android vector には viewBox の最小座標が無いため、`viewportWidth/He
 **点滅・ループ・常時の警告アニメーションは使わない**（動きは「遷移」「出現」「操作」に紐づく1回のみ）。
 実装は `ui/theme/NavTransitions.java`（遷移）と `ui/theme/ViewAnims.java`（出現）に集約している。
 
-## 今回のスコープ（UI のみ）
+## データ層との統合
 
-以下の機能は **実装していない**（UI 上は固定値ダミー表示／TODO コメント）：
+UI は DB を直接触らず、`ui/data/UiData.java` を通して `data/SafetyRepository` だけを呼ぶ
+（`CompletableFuture` の結果は `UiData.onResult` がメインスレッドへ返す）。
 
-- BLE/GATT 通信
-- Room/DB/DAO/Entity
+| 画面 | 実データの使い方 |
+|---|---|
+| SC01 | 名前を検証して `UserProfile.register()`（個人ID 1..0xFFFFFF をローカル生成・保存） |
+| SC02 | 自分の個人ID（`UserProfile`）を表示・コピー・共有。生存登録はタイマー作動中なら SC04、停止中は SC03 |
+| SC03 | `KyushuMunicipalities.prefectures()`（同梱の九州自治体マスター）で県・市町村を選択し、確定で `startSession()` |
+| SC04 | `currentSession()` から残り時間を1秒刻みで表示（0で SC02 へ）。`currentWatchStatuses()` で〇／ーを表示 |
+| SC05 | `watchTargets()` / `addWatchTarget()` / `deleteWatchTarget()` で通知対象を CRUD（重複は DB の戻り値で判定） |
+| SC06 | `currentWatchStatuses()` で現在の通信期間の受信状態を表示 |
+
+- 〇＝`RECEIVED`（今回のACTIVE期間に受信）、ー＝`NOT_RECEIVED`、全件 `NO_ACTIVE_SESSION`＝「現在の通信期間なし」、0件＝「通知対象者が登録されていません」。
+- `currentWatchStatuses()` は履歴から導出しない。履歴表示（`validHistories()`）は今回の画面では未使用。
+
+## 未実装の範囲
+
+以下は **実装していない**（TODO コメントを残している）：
+
+- BLE/GATT 通信（SC04 の通信状態表示は「通信期間中／未開始」の段階表示）
 - Foreground Service
-- 通知の発行
-- タイマー・期限管理（72時間／100時間）
-- 登録 API
-- ViewModel のデータ取得
+- Android 通知の発行（`NotificationHistory` の PENDING/POSTED/BLOCKED を使う Dispatcher）
+- 期限管理のうち履歴の100時間保持・明示クリーンアップの実行
+- 登録 API（サーバ側の本人登録）
+- ViewModel 層（現状は Fragment から `UiData` を直接呼ぶ薄い構成）
