@@ -339,8 +339,8 @@ public class SafetyRepositoryTest {
         assertEquals(0, (int) await(repository.deleteExpiredHistories()));
         now.incrementAndGet();
         assertTrue(await(repository.validHistories()).isEmpty());
-        assertEquals(1, db.safetyDao().validHistories(0).size());
-        assertEquals(1, (int) await(repository.deleteExpiredHistories()));
+        assertEquals(0, db.safetyDao().validHistories(0).size());
+        assertEquals(0, (int) await(repository.deleteExpiredHistories()));
         assertTrue(db.safetyDao().validHistories(0).isEmpty());
         assertEquals(0, (int) await(repository.deleteExpiredHistories()));
     }
@@ -379,7 +379,8 @@ public class SafetyRepositoryTest {
         await(repository.receive(next, master.version, 2, 30));
         now.set(firstExpiry + 1);
         assertEquals(1, await(repository.validHistories()).size());
-        assertEquals(1, (int) await(repository.deleteExpiredHistories()));
+        assertEquals(1, db.safetyDao().validHistories(0).size());
+        assertEquals(0, (int) await(repository.deleteExpiredHistories()));
         List<NotificationHistory> remaining = await(repository.validHistories());
         assertEquals(1, remaining.size());
         assertEquals(next, remaining.get(0).localSessionId);
