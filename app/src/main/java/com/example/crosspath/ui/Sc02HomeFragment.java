@@ -95,8 +95,11 @@ public class Sc02HomeFragment extends Fragment {
     }
 
     private void onWatchTargetClicked() {
-        // TODO(段階7): SC05 通知対象者管理画面へ遷移
-        Snackbar.make(requireView(), "TODO(段階7): SC05 通知対象者管理画面へ遷移", Snackbar.LENGTH_SHORT).show();
+        // 仕様 §11.1: SC02 → SC05
+        getParentFragmentManager().beginTransaction()
+                .replace(R.id.fragment_container, new Sc05WatchTargetFragment())
+                .addToBackStack(null)
+                .commit();
     }
 
     private void onNotificationHistoryClicked() {

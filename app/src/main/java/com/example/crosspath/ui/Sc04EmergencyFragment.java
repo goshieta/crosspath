@@ -75,11 +75,15 @@ public class Sc04EmergencyFragment extends Fragment {
         safetyList.setAdapter(adapter);
 
         // 下部ボタン
-        // TODO(段階7): SC05/SC06 通知対象者管理/通知履歴画面へ遷移
+        // 仕様 §11.1: SC04 → SC05/SC06
         view.findViewById(R.id.sc04_button_watch_target)
                 .setOnClickListener(v -> {
-                    // TODO(段階7): SC05 へ遷移
+                    getParentFragmentManager().beginTransaction()
+                            .replace(R.id.fragment_container, new Sc05WatchTargetFragment())
+                            .addToBackStack(null)
+                            .commit();
                 });
+        // TODO(段階8): SC06 通知履歴画面へ遷移
         view.findViewById(R.id.sc04_button_notification_history)
                 .setOnClickListener(v -> {
                     // TODO(段階8): SC06 へ遷移

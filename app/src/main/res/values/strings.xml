@@ -35,6 +35,12 @@
     <string name="sc04_title">緊急時画面</string>
     <!-- SC05 -->
     <string name="sc05_title">通知対象者管理</string>
+    <string name="sc05_hint_target_id">対象者の個人ID</string>
+    <string name="sc05_hint_target_name">対象者の表示名</string>
+    <string name="sc05_error_duplicate_id">同じIDがすでに登録されています</string>
+    <string name="sc05_error_invalid_id">IDの形式が正しくありません</string>
+    <string name="sc05_error_name_required">名前は必須です</string>
+    <string name="sc05_register_success">登録しました</string>
     <!-- SC06 -->
     <string name="sc06_title">通知履歴</string>
     <!-- 通信状態 -->

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:paddingLeft="@dimen/screen_margin_horizontal"
+    android:paddingRight="@dimen/screen_margin_horizontal">
+
+    <!-- 1. ID入力欄 仕様 §11.6 -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/sc05_id_input_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/section_margin_large"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        android:hint="@string/sc05_hint_target_id">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/sc05_id_edit_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:imeOptions="actionNext"
+            style="@style/TextAppearance.Material3.BodyLarge" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- 2. 名前入力欄 仕様 §11.6 -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/sc05_name_input_layout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/element_margin_small"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        android:hint="@string/sc05_hint_target_name">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/sc05_name_edit_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="textPersonName"
+            android:imeOptions="actionDone"
+            style="@style/TextAppearance.Material3.BodyLarge" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- 3. 登録ボタン（入力欄の直下） 仕様 §11.6 -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/sc05_button_register"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/element_margin_medium"
+        android:text="@string/action_register_watch_target"
+        style="@style/Widget.Material3.Button.TonalButton" />
+
+    <!-- 結果表示 -->
+    <TextView
+        android:id="@+id/sc05_result_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/element_margin_small"
+        android:visibility="gone"
+        style="@style/TextAppearance.Material3.BodyMedium" />
+
+    <!-- 4. 既登録者の一覧 仕様 §11.6 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/element_margin_medium"
+        android:text="@string/sc05_title"
+        style="@style/TextAppearance.Material3.TitleMedium" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/sc05_watch_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="@dimen/element_margin_small"
+        android:clipToPadding="false"
+        android:paddingBottom="@dimen/element_margin_small"
+        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+    <!-- 5. ホームボタン 仕様 §11.6 -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/sc05_button_home"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/section_margin_large"
+        android:text="@string/action_home"
+        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+</LinearLayout>
