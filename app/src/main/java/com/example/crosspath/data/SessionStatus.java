@@ -34,10 +34,14 @@ public final class SessionStatus {
 
     // Package-private: production callers cannot supply a fabricated current time.
     static SessionStatus evaluate(ActiveSession session, long now) {
+        return evaluate(session, now, true);
+    }
+
+    static SessionStatus evaluate(ActiveSession session, long now, boolean trusted) {
         if (session == null) return new SessionStatus(State.NO_SESSION, null, 0);
         if (!"ACTIVE".equals(session.state)) return new SessionStatus(State.ENDED, session, 0);
         if (now >= session.endsAtWall) return new SessionStatus(State.EXPIRED, session, 0);
-        if (now < session.startedAtWall || now < session.lastObservedWall) {
+        if (!trusted || now < session.startedAtWall || now < session.lastObservedWall) {
             return new SessionStatus(State.CLOCK_UNCERTAIN, session, 0);
         }
         return new SessionStatus(State.ACTIVE, session, session.endsAtWall - now);

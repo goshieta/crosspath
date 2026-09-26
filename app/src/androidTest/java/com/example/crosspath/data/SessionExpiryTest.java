@@ -91,7 +91,7 @@ public class SessionExpiryTest {
         for (long time : new long[]{end, end + 1}) {
             now.set(time);
             SessionStatus expired = await(repository.sessionStatus());
-            assertEquals(SessionStatus.State.EXPIRED, expired.state);
+            assertEquals(SessionStatus.State.ENDED, expired.state);
             assertEquals(0, expired.remainingMillis);
             assertFalse(expired.canCommunicate);
             assertEquals(WatchStatus.State.NO_ACTIVE_SESSION,
@@ -102,7 +102,7 @@ public class SessionExpiryTest {
             rejected(repository.pageAfter(sessionId, 0, 256));
         }
         now.set(end);
-        assertEquals(SafetyRepository.EndResult.ENDED, await(repository.endExpiredSession(sessionId)));
+        assertEquals(SafetyRepository.EndResult.ALREADY_ENDED, await(repository.endExpiredSession(sessionId)));
         assertEquals(0, db.safetyDao().count());
         assertEquals(SessionStatus.State.ENDED, await(repository.sessionStatus()).state);
         assertFalse(db.safetyDao().session().relayEnabled);
@@ -201,7 +201,8 @@ public class SessionExpiryTest {
         assertEquals(2, await(repository.validHistories()).size());
         now.set(expiry);
         assertTrue(await(repository.validHistories()).isEmpty());
-        assertEquals(2, (int) await(repository.deleteExpiredHistories()));
+        assertTrue(db.safetyDao().validHistories(0).isEmpty());
+        assertEquals(0, (int) await(repository.deleteExpiredHistories()));
         assertEquals(2, await(repository.watchTargets()).size());
     }
 
@@ -219,8 +220,8 @@ public class SessionExpiryTest {
         assertEquals(2, db.safetyDao().count());
         assertNotNull(db.safetyDao().find(1));
         assertNotNull(db.safetyDao().find(2));
-        assertEquals(1, await(repository.validHistories()).size());
-        assertEquals(SessionStatus.State.EXPIRED, await(repository.sessionStatus()).state);
+        assertEquals(1, db.safetyDao().validHistories(now.get()).size());
+        assertThrows(ExecutionException.class, () -> await(repository.sessionStatus()));
         rejected(repository.receive(sessionId, master.version, 3, 1));
         rejected(repository.pageAfter(sessionId, 0, 256));
         assertThrows(ExecutionException.class, () -> await(repository.checkAndEndExpiredSession()));
@@ -247,7 +248,7 @@ public class SessionExpiryTest {
         assertThrows(ExecutionException.class, () -> await(repository.endExpiredSession(sessionId)));
         assertEquals("ACTIVE", db.safetyDao().session().state);
         assertEquals(2, db.safetyDao().count());
-        assertEquals(1, await(repository.findPendingNotifications(sessionId)).size());
+        assertEquals(1, db.safetyDao().pendingNotifications(sessionId, now.get()).size());
     }
 
     @Test public void expiryDuringBatchRollsBackRecordsHistoryAndRevision() throws Exception {
@@ -324,7 +325,8 @@ public class SessionExpiryTest {
         CompletableFuture<SafetyRepository.EndResult> finish = repository.endExpiredSession(sessionId);
         String next = await(replacement);
         SafetyRepository.EndResult result = await(finish);
-        assertTrue(result == SafetyRepository.EndResult.ENDED || result == SafetyRepository.EndResult.STALE_SESSION);
+        assertTrue(result == SafetyRepository.EndResult.ENDED || result == SafetyRepository.EndResult.STALE_SESSION
+                || result == SafetyRepository.EndResult.ALREADY_ENDED);
         assertTrue(await(repository.sessionStatus()).canCommunicate(next));
         assertEquals(next, db.safetyDao().find(1).localSessionId);
         assertEquals(1, db.safetyDao().count());
@@ -335,7 +337,7 @@ public class SessionExpiryTest {
         now.set(start - 1);
         assertEquals(SessionStatus.State.CLOCK_UNCERTAIN, await(repository.sessionStatus()).state);
         assertEquals(0, await(repository.sessionStatus()).remainingMillis);
-        assertEquals(SafetyRepository.EndResult.NOT_EXPIRED, await(repository.endExpiredSession(sessionId)));
+        assertEquals(SafetyRepository.EndResult.CLOCK_UNCERTAIN, await(repository.endExpiredSession(sessionId)));
         assertEquals(WatchStatus.State.NO_ACTIVE_SESSION, await(repository.currentWatchStatuses()).get(0).state);
         rejected(repository.receive(sessionId, master.version, 3, 1));
         rejected(repository.pageAfter(sessionId, 0, 256));

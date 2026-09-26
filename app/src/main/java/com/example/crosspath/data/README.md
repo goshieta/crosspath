@@ -1,120 +1,154 @@
 # Room storage API (stages 2, 4 and 5)
 
-## 72時間の期限管理 / 通信・UI担当との契約
+## 72時間管理とアプリ接続契約
 
-セッションの正本はDBの `startedAtWall` と `endsAtWall` です。市町村確定時の
-開始時刻＋72時間を一度だけ保存し、Repository再生成・DB再オープン・復帰・終了処理で
-延長しません。`now >= endsAtWall`（終了時刻ちょうどを含む）で期限切れです。
-カウントダウン値は表示用スナップショットで、期限判定の正本ではありません。
+永続化済みの `startedAtWall` と `endsAtWall = startedAtWall + 72時間` は、
+再起動・Repository再生成・終了処理で変更しません。期限ちょうどから通信を拒否します。
+残り時間は表示用スナップショットで、カウントダウンの減算結果は期限判定に使いません。
+
+### 状態取得は終了処理を伴う
 
 | API | 契約 |
 |---|---|
-| `sessionStatus()` | 現在の状態、sessionId、保存済みの開始・予定終了時刻、非負のremainingMillis、canCommunicateを返す。読み取りのみ |
-| `checkAndEndExpiredSession()` | 起動・復帰・通信開始時の入口。現在セッションの期限確認と、必要な終了・配信データ削除を同一トランザクションで行い、コミット後の状態を返す |
-| `endExpiredSession(expectedSessionId)` | 指定セッションだけを期限終了する。古いコールバックや再試行用。予定終了時刻は変更しない |
-| `receive()` / `applyReceivedBatch()` | 入口と全書き込み後で通信可否・セッションIDを確認。途中で期限に達した場合はレコード・通知履歴・revisionをすべてロールバック |
-| `pageAfter()` | ページ取得の前後で通信可否・セッションIDを確認。期限切れ等では空リストを返す代わりにFutureが例外完了 |
-| `currentWatchStatuses()` | 同じ期限判定を利用。期限切れ・終了済み・時計不整合ではSC04／SC06用にNO_ACTIVE_SESSION（現在の通信期間なし）を返す |
+| `sessionStatus()` / `checkAndEndExpiredSession()` | 同じ入口。時計を確認し、期限終了・配信データ削除・失効履歴削除を行ってから状態を返す |
+| `endExpiredSession(expectedSessionId)` | 指定IDだけを終了。古い要求で新セッションの状態・データを変更しない |
+| `currentWatchStatuses()` | 先に同じ期限・履歴処理を行う。SC04／SC06に期限切れ・終了済み・時計不整合の受信マークを出さない |
+| `validHistories()` / `findPendingNotifications(id)` / 配信状態更新 | 先に期限・失効履歴削除を実行。過去期間の未失効PENDING再取得と条件付き状態更新は維持 |
+| `deleteExpiredHistories()` | 失効履歴だけを明示的に削除し件数を返す。先行する状態・表示APIが削除済みなら0 |
+| `receive()` / `applyReceivedBatch()` | 保存前・全書き込み後に期限と接続IDを確認。失敗時はバッチ・履歴・revision・時計更新をロールバック |
+| `pageAfter()` | 読み取り前後に期限と接続IDを確認。拒否時はFuture例外完了（空ページとは区別） |
+| `currentSession()` | 互換用の生の保存状態。診断用であり、通信許可や画面の期限判定には使わない |
 
-`SessionStatus.State` は `NO_SESSION`（なし）、`ACTIVE`（有効）、
-`EXPIRED`（期限切れ・終了処理前）、`ENDED`（終了済み）を区別します。
-時計の巻き戻しを検出した場合は追加の `CLOCK_UNCERTAIN` を返し、通信を拒否します。
-`remainingMillis` は有効期間だけ残りミリ秒、それ以外は0です。
-`canCommunicate` はACTIVEかつ保存済みrelayEnabledがtrueの場合だけtrueです。
-`canCommunicate(expectedSessionId)` は接続時のID一致も確認します。
-通信権限・Bluetooth・接続状態の検査は通信側の責務です。relayEnabledがfalseでも
-有効期間の受信表示は保持されます（期間終了とは区別）。
+`SessionStatus` はNO_SESSION、ACTIVE、ENDED、CLOCK_UNCERTAINを返します。
+EXPIREDは終了処理前の内部判定として残しますが、状態取得APIは終了処理後のENDEDを
+返します。削除失敗なら例外完了し、成功した状態スナップショットを返しません。
+remainingMillisはACTIVE以外では0、ACTIVEでは非負の残り時間です。
+canCommunicateはACTIVEかつrelayEnabled=trueだけ、`canCommunicate(connectionSessionId)`
+は接続開始時のID一致も確認します。Bluetooth・権限・接続状態は通信側で確認します。
 
-`EndResult` は `NO_SESSION`、`STALE_SESSION`、`NOT_EXPIRED`、`ENDED`、
-`ALREADY_ENDED` です。前3つは変更なし。初回成功だけENDED、再実行はALREADY_ENDEDです。
-状態をENDED／relayEnabled=falseへ更新し、対象IDのSafetyRecordを削除します。
-WatchTargetとNotificationHistoryには触れません。並行受信・終了・次期間開始は
-Roomの書き込みトランザクションで直列化されます。DB例外時は全体をロールバックし、
-Futureは例外完了します。成功結果は `runInTransaction` のコミット完了後だけ返します。
-失敗時は通信を止め、次回に同じIDで再試行してください。期限切れのACTIVE行が残っても
-通常の時計下では期限ゲートが受信保存と送信ページ取得を拒否します。
+EndResultはNO_SESSION、STALE_SESSION、NOT_EXPIRED、CLOCK_UNCERTAIN、ENDED、
+ALREADY_ENDEDです。CLOCK_UNCERTAINでは期限未到来でも通信停止を要求し、データは
+まだ削除しません。終了状態への変更と対象IDのSafetyRecord削除は同一トランザクションです。
+WatchTargetと未失効NotificationHistoryは保持します。履歴期限は予定終了＋100時間で、
+処理遅延・表示・再受信によって延長しません。成功結果はコミット後だけ返します。
+受信中の期限到達はまず受信全体をロールバックします。通信側は成功ACKを返さず停止し、
+`checkAndEndExpiredSession()` を再度呼んで終了処理を行います。
 
-### 呼び出し順序
+### 通信停止の接続口
 
-1. アプリ起動・復帰時は `checkAndEndExpiredSession()` の完了を待ち、
-   `deleteExpiredHistories()` を実行してから画面データを再取得します。
-   `currentSession()` は互換性のため残す生のDBスナップショットです。
-   通信開始やUIの期限判定に直接使わず、`SessionStatus` を使ってください。
-2. 通信開始前にも `checkAndEndExpiredSession()` を呼び、canCommunicateがtrueの場合に
-   そのsessionIdを接続・予約処理・受信コールバック・送信待ちデータへ付けます。
-3. 各送信ページ取得前にも期限確認・終了処理を呼び、接続IDとの一致を確認してから
-   `pageAfter(connectionSessionId, lastUserId, limit)` を呼びます。
-4. **ページ取得後、実際の送信直前にも** `sessionStatus()` を呼び、
-   `canCommunicate(connectionSessionId)` を確認します。各フラグメントも同様です。
-   判定結果は通信の有効期限を確保するものではなく、取得時点のスナップショットです。
-5. 受信は接続開始時に保持したIDをreceive／applyReceivedBatchへ渡します。
-   新セッションのIDへ差し替えないでください。成功完了後だけ保存ACKを検討し、
-   CAPACITY_REJECTEDを保存成功にしないでください。
-6. 期限切れ・終了・例外を検出した通信側は、**対象sessionIdの**予約処理、送信待ちデータ、
-   バッファ、広告・探索、実行中のBLE通信を停止・破棄してください。
-   古いセッションの停止要求で新しいセッションを停止しないよう、通信側でもIDを照合します。
-   DB削除だけではメモリ上のデータや実行中のBLE通信は停止しません。
-
-以下は送信ページ取得までの例です。呼び出し側で例外完了を処理し、UI操作はUIスレッド、
-通信操作は通信担当のExecutorへ戻してください。
+本番DBは `AppDatabase.open(context)` で作成してください。Android時計とRoom移行を
+構成します。独自にRoom.databaseBuilderを使う本番コードはこのファクトリーへ移してください。
+時計注入はpackage-privateのテスト用コンストラクターだけです。
 
 ```java
-// 起動・復帰: この結果が通信の入口になる。
-repository.checkAndEndExpiredSession().thenAccept(status -> {
-    // status.state / status.remainingMillis を表示。
-    // 通信を開始するなら status.canCommunicate と status.sessionId を使用。
-});
-
-// connectionSessionId は接続開始時に捕捉したID。
-repository.checkAndEndExpiredSession().thenCompose(status -> {
-    if (!status.canCommunicate(connectionSessionId)) {
-        throw new IllegalStateException("Connection session is no longer active");
-    }
-    return repository.pageAfter(connectionSessionId, lastUserId, 256);
-}).thenCompose(page -> repository.sessionStatus().thenApply(status -> {
-    if (!status.canCommunicate(connectionSessionId)) {
-        throw new IllegalStateException("Discard this connection's queued page");
-    }
-    return page; // 通信側へ渡す。実際のBLE呼び出し直前にもゲートを再確認する。
-}));
-
-// セッションを捕捉済みの期限コールバック・再試行:
-repository.endExpiredSession(connectionSessionId);
+AppDatabase db = AppDatabase.open(context);
+SafetyRepository repository = new SafetyRepository(
+    db, dbExecutor, KyushuMunicipalities.load(), sessionId -> {
+        // 通信担当の実装へ接続する。
+        // まず、このIDの送信許可を閉じる。
+        // protocolExecutorへ「このIDだけ停止」を投入する。
+        // 広告・スキャン・GATT・予約処理・送信キュー・受信バッファ・Serviceを停止する。
+    });
 ```
 
-通知履歴は予定終了時刻＋100時間まで保持し、終了処理の遅延で期限をずらしません。
-既存の履歴削除、過去セッションを含むPENDING再取得、配信状態の条件付き更新契約を
-維持しています（下記Stage 4参照）。設計草案には旧期間PENDINGの配信抑止案もありますが、
-今回の依頼の「既存契約を維持」を優先し、配信担当の処理には変更を加えていません。
+SessionStopHandlerはDBトランザクションの外で呼ばれ、ハンドラーの呼び出しが戻る前に
+APIは成功完了しません。DB処理が失敗した場合も、対象IDが分かれば停止を要求します。
+ハンドラーの例外もFutureを失敗させますが、既にコミットした削除は元に戻りません。
+次回の状態確認で停止要求を再送するため、ハンドラーは冪等・スレッド安全にしてください。
+RepositoryのFuture完了をハンドラー内で待つとデッドロックし得るため禁止です。
 
-### 時刻・バックグラウンド実行の保証範囲
+非同期に投入した停止処理の完了まではRepositoryは保証しません。通信側で実際の停止を
+追跡してください。従来のコンストラクターは互換性のため停止ハンドラーなしでも動作します。
+その場合もDBゲートと削除は働きますが、実通信は停止されません。
+**DB削除だけではメモリ上のデータや実行中のBLE通信は停止しません。**
+古いIDの停止要求や受信失敗通知が新期間へ遅れて届く場合があります。通信側でもIDを比較し、
+新期間を止めたり、古いキューを新期間のIDへ付け替えたりしないでください。
 
-本番時計は `System.currentTimeMillis()`（UTC Unixミリ秒）です。
-既存の `startedAtElapsed` は開始時に記録されていますが、`bootMarker` は未設定で、
-再起動前後の単調時計を安全に比較する仕組みがありません。今回は永続化済み壁時計を
-共通判定に使用します。設計草案9.1の「同一起動中はelapsedRealtimeを主時計にする」
-方式は未実装です。時計注入はpackage-privateコンストラクターだけに限定し、
-本番の公開APIに現在時刻・期限の任意指定は追加していません。
+### 起動・復帰・送受信・画面表示の順序
 
-通常の時計下では、プロセス・端末再起動を経ても保存済みの期限が維持されます。
-現在時刻が開始時刻／保存済みlastObservedWallより前なら通信を保守的に拒否します。
-lastObservedWallは開始・新規受信の保存時に更新され、毎回の時刻観測を記録するものでは
-ありません。この検出で捉えられない巻き戻しは、実時間に対する有効期間・履歴保持を
-長くする場合があります。時計を進めると早期終了する場合があります。
-一度コミット済みのENDEDは時計を戻しても復活しません。
-任意の時計改変や再起動をまたぐ厳密な実時間72時間／100時間は保証しません。
+1. アプリ起動・復帰、Foreground Service開始、BLE探索・GATT接続開始前に
+   `checkAndEndExpiredSession()` の完了を待つ。失効履歴削除もこの入口で実行される。
+2. canCommunicate=trueの場合だけ、そのsessionIdを接続・予約・送受信キューに捕捉する。
+3. 各送信ページ取得前に `sessionStatus()` で期限と接続IDを確認してからpageAfterを呼ぶ。
+4. **実際の送信直前・各フラグメント送信前にも** `sessionStatus()` を呼び、
+   `canCommunicate(connectionSessionId)` を確認する。結果は通信許可の有効期間を確保する
+   ものではない。完了通知を通信Executorへ戻した際にも古い接続・停止済みIDを破棄する。
+5. 受信は接続開始時のIDをapplyReceivedBatchへ渡す。例外完了では成功ACKを返さない。
+   成功完了でもCAPACITY_REJECTEDを保存成功にしない。
+6. SC04／SC06表示前はcheckAndEndExpiredSessionを呼び、続けてcurrentWatchStatuses／
+   validHistoriesを取得する。これらの表示API自体にも同じ前処理があり、接続忘れを防ぐ。
+7. 通知参照前にもfindPendingNotifications／validHistoriesを通す。期限切れのOS通知を
+   取り消す処理は通知担当が接続する（DB削除はAndroid通知を取り消さない）。
 
-DB処理では最後の読み書き後に再確認しますが、最終確認とSQLiteコミット／Future通知／
-BLE送信を壁時計と原子的に同期させることはできません。その短い間に期限を迎える場合も
-あるため、通信側の送信直前チェックとセッション別停止が必要です。
-MainActivity接続、常駐サービス、OSスケジューラーは今回の範囲外です。
-**停止中に72時間ちょうどでバックグラウンド実行・物理削除される保証はありません。**
-次回のcheckAndEndExpiredSession呼び出しで終了処理します。画面の再描画や期限確認の
-呼び出し予約もUI／通信担当が接続します。SQLite DELETEは復元不能な物理消去ではありません。
+```java
+repository.checkAndEndExpiredSession().thenAccept(status -> {
+    // UIスレッドへ戻してstatus.state / remainingMillisを表示。
+});
+repository.sessionStatus().thenCompose(status -> {
+    if (!status.canCommunicate(connectionSessionId)) {
+        throw new IllegalStateException("Connection no longer active");
+    }
+    return repository.pageAfter(connectionSessionId, lastUserId, 256);
+}); // 送信直前にも再確認する。
+```
 
-結合後は、送信待ち・BLE実行中の期限到達、古い停止イベントと新接続の競合、
-省電力・強制停止・再起動からの復帰、SC04／SC06再描画、時計変更時の案内を検証してください。
-このデータ層のテストだけでBLEの停止時刻やバックグラウンド動作を保証するものではありません。
+### 単調時計・再起動・Room移行
+
+同一起動中は `SystemClock.elapsedRealtime()` を使用します。スリープ時間も含みます。
+起動識別子には `Settings.Global.BOOT_COUNT` を読み取り、ActiveSession.bootMarkerへ保存します。
+始点の単調時計はstartedAtElapsedへ保存します。ClockAnchorには論理UTC時刻・単調時計・
+bootMarkerを永続化し、Repository再生成や新期間開始でも時計の進行を失わないようにします。
+論理時刻は「壁時計」と「前回の論理時刻＋単調時計の経過」の大きい方です。開始時の
+単調時計から算出する期限も使い、壁時計の巻き戻しで期限を延長しません。
+
+bootMarkerが変わった場合は保存済みUTC時刻を基準に復元し、新起動の単調時計に結び付けます。
+保存済み下限からの巻き戻し、単調時計の逆行、起動識別子の取得不能を検出した場合は
+CLOCK_UNCERTAINとして通信を拒否し、停止を要求します。壁時計と単調時計を同時に
+採取できないため1秒以内の差は許容しますが、論理時刻は戻さず、残り時間も延長しません。
+時刻の信頼性が戻れば再確認で再開可能です。既にENDEDになった期間は復活しません。
+
+オフラインで、再起動中に行われた時計改変が保存済み下限を下回らない場合は検出できません。
+その場合の電源OFF時間を正確に復元することはできず、任意の時計改変・DB復元まで含む
+厳密な実時間72時間／100時間は保証しません。壁時計の大幅な進みは早期終了・履歴失効に
+つながります。信頼できる外部時刻の取得は別課題です。
+
+DBバージョン2でClockAnchorを追加します。MIGRATION_1_2は既存4テーブルの時刻・データを
+変更しません。旧版の空bootMarkerは再起動相当としてUTC時刻から復元し、以降の時計進行を
+保存します。旧版で記録されなかった時計変更を後から検出することはできません。
+
+公式仕様：[SystemClock](https://developer.android.com/reference/android/os/SystemClock)、
+[BOOT_COUNT](https://developer.android.com/reference/android/provider/Settings.Global#BOOT_COUNT)。
+
+### 後続PRの削除・結合テスト契約
+
+PeerSyncState、BlockDigest、SyncProgressは現在のブランチに存在しません。実装するPRで
+各行をlocalSessionIdへ所属させ、**SafetyRecord削除と同じ終了トランザクション**へ削除を
+組み込んでください。新期間へ旧期間の要約・スナップショット・同期進捗を再利用しません。
+新期間開始時の旧データ整理経路にも同じ対象を追加し、途中失敗時の全体ロールバックを
+検証してください。未実装のテーブルやBLEをダミー実装して完了扱いにはしていません。
+
+MainActivity、Service、BLE、SC04／SC06、OSスケジューラーへの接続は後続PRです。
+定期実行や復帰イベントの接続がなければ、APIが呼ばれるまで物理削除・停止通知は実行されません。
+**アプリ停止中の72時間ちょうどのバックグラウンド実行は保証しません。** SQLite DELETEは
+復元不能な物理消去でもありません。最終期限確認・コミット・BLE送信は原子的に同期できないため、
+通信側の停止ゲートが必要です。
+
+追加のClockAnchorTest／MonotonicExpiryTestは時計巻き戻し、再起動、DB再オープン、
+v1移行、状態・通知APIの物理削除、停止ハンドラーのID・失敗・再試行を検証します。
+実際のService／BLE／画面の結合テストは接続後に以下を追加してください。
+
+- Service稼働中・BLE接続中・送信待ち・受信バッファ保持中の期限到達で対象IDだけ停止。
+- 受信中の期限到達では成功ACKなし。停止イベントと新セッション開始の競合でも新期間を維持。
+- 期限後の画面復帰で通信期間なしを表示し、配信データ・失効履歴を実際に削除。
+- 強制停止・電源OFF・省電力・時計変更からの復帰。実機BLE停止時刻はエミュレーターで代替しない。
+
+再現用コマンド：`./gradlew :app:assembleDebug :app:testDebugUnitTest :app:assembleDebugAndroidTest :app:connectedDebugAndroidTest`。
+WindowsでJDKのUnixソケットエラーが出る環境では、既存のapp/build/tmpディレクトリを使い
+`JAVA_TOOL_OPTIONS=-Djdk.net.unixdomain.tmpdir=C:\dev\crosspath\app\build\tmp` を実行時に指定します。
+CIで実行する場合も同じタスクを使い、`app/build/test-results/testDebugUnitTest/`、
+`app/build/outputs/androidTest-results/connected/`、`app/build/reports/androidTests/connected/`
+を成果物として保存してください。端末テストのディレクトリにはテストごとのlogcatも出力されます。
+CI設定・実機BLEログの追加は後続PRで、現時点でCI実行済みとは扱いません。
 
 ## Stage 4 / SC04 integration
 
@@ -169,8 +203,8 @@ sessions yield NO_ACTIVE_SESSION for every target, even when history remains.
 An empty list means no registered targets. Refresh on display and at session expiry.
 Registration after receipt can show RECEIVED without creating notification history.
 `watchTargets()` is registration data only. `validHistories()` is historical display
-across all sessions, filtered by retention expiry; NEVER derive current receipt
-marks from it. Neither read changes or automatically ends a session.
+across all sessions, with expired rows deleted before reading; NEVER derive current receipt
+marks from it. Display reads now maintain session expiry and physically delete expired histories before returning.
 
 ### Repository / NotificationDispatcher contract
 
@@ -276,8 +310,8 @@ repository.deleteExpiredHistories();
   unconditional history-list API. The UI is not connected to history yet and must
   use validHistories(), refreshing when displayed or when expiry is reached.
 - Scope excludes BLE communication, notification delivery/UI, scheduled background
-  execution, robust clock-change handling, and synchronization protocols/digests.
-  Explicit 72-hour completion/cleanup and wall-clock gates are implemented; see above.
+  execution, arbitrary clock tampering across reboots, and synchronization protocols/digests.
+  Explicit 72-hour completion/cleanup and monotonic clock gates are implemented; see above.
 - No UI or BLE implementation is included here. BLE ACK integration remains with
   the communication owner. Do not serialize Room entities.
 

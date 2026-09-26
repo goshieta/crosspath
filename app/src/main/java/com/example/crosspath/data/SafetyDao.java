@@ -34,9 +34,14 @@ abstract class SafetyDao {
     abstract int deleteSessionRecords(String sessionId);
 
     @Query("UPDATE ActiveSession SET state = 'ENDED', relayEnabled = 0 "
-            + "WHERE singletonId = 1 AND sessionId = :sessionId AND state = 'ACTIVE' "
-            + "AND endsAtWall <= :now")
-    abstract int endExpiredSession(String sessionId, long now);
+            + "WHERE singletonId = 1 AND sessionId = :sessionId AND state = 'ACTIVE'")
+    abstract int endExpiredSession(String sessionId);
+
+    @Query("SELECT * FROM ClockAnchor WHERE singletonId = 1")
+    abstract ClockAnchor clockAnchor();
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract void saveClockAnchor(ClockAnchor anchor);
 
     @Query("SELECT * FROM WatchTarget WHERE targetUserId = :id")
     abstract WatchTarget watch(int id);
