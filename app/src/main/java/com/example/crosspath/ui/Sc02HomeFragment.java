@@ -103,7 +103,10 @@ public class Sc02HomeFragment extends Fragment {
     }
 
     private void onNotificationHistoryClicked() {
-        // TODO(段階8): SC06 通知履歴画面へ遷移
-        Snackbar.make(requireView(), "TODO(段階8): SC06 通知履歴画面へ遷移", Snackbar.LENGTH_SHORT).show();
+        // 仕様 §11.1: SC02 → SC06
+        getParentFragmentManager().beginTransaction()
+                .replace(R.id.fragment_container, new Sc06NotificationHistoryFragment())
+                .addToBackStack(null)
+                .commit();
     }
 }

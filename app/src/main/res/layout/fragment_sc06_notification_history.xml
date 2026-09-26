@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:paddingLeft="@dimen/screen_margin_horizontal"
+    android:paddingRight="@dimen/screen_margin_horizontal">
+
+    <!-- 今回の〇／ー一覧 仕様 §11.7 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/sc06_safety_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="@dimen/section_margin_large"
+        android:clipToPadding="false"
+        android:paddingBottom="@dimen/element_margin_small"
+        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+    <!-- 通信期間なしの場合の表示（デフォルトはGONE） 仕様 §11.8 -->
+    <TextView
+        android:id="@+id/sc06_no_session_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/element_margin_medium"
+        android:visibility="gone"
+        android:text="@string/state_no_session"
+        style="@style/TextAppearance.Material3.BodyLarge" />
+
+    <!-- ホームボタン 仕様 §11.7 -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/sc06_button_home"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/section_margin_large"
+        android:text="@string/action_home"
+        style="@style/Widget.Material3.Button.OutlinedButton" />
+
+</LinearLayout>

@@ -83,10 +83,13 @@ public class Sc04EmergencyFragment extends Fragment {
                             .addToBackStack(null)
                             .commit();
                 });
-        // TODO(段階8): SC06 通知履歴画面へ遷移
+        // 仕様 §11.1: SC04 → SC06
         view.findViewById(R.id.sc04_button_notification_history)
                 .setOnClickListener(v -> {
-                    // TODO(段階8): SC06 へ遷移
+                    getParentFragmentManager().beginTransaction()
+                            .replace(R.id.fragment_container, new Sc06NotificationHistoryFragment())
+                            .addToBackStack(null)
+                            .commit();
                 });
     }
 
