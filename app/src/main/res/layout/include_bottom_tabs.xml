@@ -1,9 +1,9 @@
-<com.google.android.material.navigation.NavigationBarView
+<com.google.android.material.bottomnavigation.BottomNavigationView
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/bottom_tabs"
-    layout_width="match_parent"
-    layout_height="wrap_content"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
     android:background="?attr/colorSurfaceContainer"
     app:menu="@menu/menu_bottom_tabs"
     app:labelVisibilityMode="labeled" />
