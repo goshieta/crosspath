@@ -19,4 +19,9 @@ public final class WireRecord {
             throw new IllegalArgumentException("userId must be 1..16777215 (0 is reserved)");
         }
     }
+
+    /** Transport decoding checks numeric bounds; persistence also requires master membership. */
+    public String requireMunicipalityName(MunicipalityMaster master) {
+        return master.requireName(municipalityCode);
+    }
 }

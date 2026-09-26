@@ -39,6 +39,9 @@ abstract class SafetyDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract long insertHistory(NotificationHistory history);
 
-    @Query("SELECT * FROM NotificationHistory ORDER BY notificationId")
-    abstract List<NotificationHistory> histories();
+    @Query("SELECT * FROM NotificationHistory WHERE historyExpiresAt > :now ORDER BY notificationId")
+    abstract List<NotificationHistory> validHistories(long now);
+
+    @Query("DELETE FROM NotificationHistory WHERE historyExpiresAt <= :now")
+    abstract int deleteExpiredHistories(long now);
 }

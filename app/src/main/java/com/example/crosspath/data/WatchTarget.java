@@ -12,6 +12,7 @@ public final class WatchTarget {
 
     public WatchTarget(int targetUserId, @NonNull String displayName, long createdAt) {
         WireRecord.requireUserId(targetUserId);
+        MunicipalityMaster.requireName(displayName);
         this.targetUserId = targetUserId;
         this.displayName = displayName;
         this.createdAt = createdAt;

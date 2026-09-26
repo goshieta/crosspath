@@ -7,6 +7,7 @@ The caller owns the executor and database and closes them after pending work end
 ```java
 AppDatabase db = AppDatabase.open(context);
 ExecutorService dbExecutor = Executors.newSingleThreadExecutor();
+// Uses the bundled e-Stat Kyushu municipality master.
 SafetyRepository repository = new SafetyRepository(db, dbExecutor);
 
 // On municipality confirmation: creates the local session and self record atomically.
@@ -15,7 +16,7 @@ repository.startSession(myUserId, municipalityCode).thenAccept(localSessionId ->
 });
 
 // BLE receiver: call with the token captured when this connection began.
-repository.receive(localSessionId, userId, municipalityCode)
+repository.receive(localSessionId, peerMasterVersion, userId, municipalityCode)
     .whenComplete((result, error) -> {
         // This runs on the completing thread. Dispatch to the protocol executor.
         // error != null: do NOT send a success ACK.
@@ -23,15 +24,35 @@ repository.receive(localSessionId, userId, municipalityCode)
     });
 
 // Batch receive (1..256 immutable WireRecord values):
-repository.applyReceivedBatch(localSessionId, records);
+repository.applyReceivedBatch(localSessionId, peerMasterVersion, records);
 
 // Send in bounded pages. Use the last returned userId as the next cursor.
 repository.pageAfter(localSessionId, 0, 256);
+
+// UI callers read only unexpired history (expiry evaluated on the DB executor).
+repository.validHistories();
+repository.deleteExpiredHistories();
 ```
 
 - WireRecord contains only userId and municipalityCode. No timestamps are exchanged.
 - IDs are 1..16,777,215; 0 is reserved per the draft. Locations are integers 0..255.
-  Municipality master membership validation awaits the team's code table.
+  WireRecord is a transport/Room projection and checks numeric bounds at construction.
+  Its requireMunicipalityName(master) validates membership. startSession() and
+  applyReceivedBatch() always call it before enqueueing, including for duplicates.
+  A single unknown code rejects the entire batch without changing records or history.
+- MunicipalityMaster requires a nonempty, immutable copy of an approved code/name
+  table and rejects missing/blank names. Notification history stores the resolved
+  name in the same transaction as the received record. No fallback names are saved.
+  The default constructor loads the bundled 233-municipality Kyushu table from
+  e-Stat as of 2026-09-26. Wire codes 1..233 are assigned in official-code order;
+  0 and 234..255 are unassigned and rejected. Official five-digit codes are separate
+  from the one-byte wire codes. See [master provenance and allocation rules](../../../../../resources/municipalities/README.md).
+  The version is kyushu-2026-09-26-v1. Both receive APIs require peerMasterVersion
+  from the connection handshake and reject null/unknown/different versions before
+  any DB changes, even for duplicate records. Never substitute the local version
+  for an unknown peer version. municipalityMasterVersion() exposes the local value.
+  The actual BLE version handshake belongs to the communication layer; it adds no
+  fields to the two-integer WireRecord. Existing allocations must never be renumbered.
 - NEW_PERSON means inserted; DUPLICATE means already stored at the same location;
   ID_ALREADY_KNOWN keeps the first location. CAPACITY_REJECTED means NOT stored.
   Capacity is 13,000,000 people including self. A completed batch can contain
@@ -43,14 +64,23 @@ repository.pageAfter(localSessionId, 0, 256);
   clear old relay records but retain history. A stale connection token is rejected.
 - currentSession() restores the local token after restart. It may return null or
   an expired session; reading it does not activate communication.
-- addWatchTarget() is insert-only and does not notify for earlier received records.
-  Notification delivery/UI, municipality names, automatic expiry cleanup, robust
-  clock rollback/reboot handling and synchronization digests belong to later stages.
+- WatchTarget rejects null, empty and whitespace-only names, including full-width
+  spaces. addWatchTarget() is insert-only and does not notify for earlier records.
+- validHistories() returns only historyExpiresAt > now; deleteExpiredHistories()
+  deletes historyExpiresAt <= now and returns the deleted count. There is no
+  unconditional history-list API. The UI is not connected to history yet and must
+  use validHistories(), refreshing when displayed or when expiry is reached.
+- Stage 2 scope excludes BLE communication, notification delivery/UI, automatic
+  72-hour session completion/cleanup, scheduled history cleanup, robust reboot and
+  clock-change handling, and synchronization protocols/digests. Basic wall-clock
+  session guards and explicit history expiry queries/deletion are implemented here.
 - No UI or BLE implementation is included here. BLE ACK integration remains with
   the communication owner. Do not serialize Room entities.
 
 Tests: WireRecordTest covers numeric boundaries and transport fields.
+MunicipalityMasterTest and WatchTargetTest cover master/name validation.
 SafetyRepositoryTest uses a file-backed Room DB and covers duplicate/location
 handling, capacity (a reduced test limit), concurrent receives, reopen persistence,
-session isolation and an SQLite-trigger-induced rollback.
+session isolation, unknown municipality rejection, resolved name snapshots, exact
+history expiry boundaries, selective cleanup and an SQLite-trigger-induced rollback.
 The 13-million-row physical storage/performance test is not included.

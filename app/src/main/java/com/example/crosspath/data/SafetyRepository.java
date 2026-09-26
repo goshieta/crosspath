@@ -24,6 +24,7 @@ public final class SafetyRepository {
     private final Executor executor;
     private final LongSupplier clock;
     private final long capacity;
+    private final MunicipalityMaster municipalities;
 
     public enum Outcome { NEW_PERSON, DUPLICATE, ID_ALREADY_KNOWN, CAPACITY_REJECTED }
 
@@ -37,22 +38,33 @@ public final class SafetyRepository {
         }
     }
 
+    public SafetyRepository(AppDatabase db, Executor executor, MunicipalityMaster municipalities) {
+        this(db, executor, System::currentTimeMillis, MAX_RECORDS, municipalities);
+    }
+
     public SafetyRepository(AppDatabase db, Executor executor) {
-        this(db, executor, System::currentTimeMillis, MAX_RECORDS);
+        this(db, executor, KyushuMunicipalities.load());
+    }
+
+    public String municipalityMasterVersion() {
+        return municipalities.version;
     }
 
     // Smaller capacity and deterministic clock allow boundary tests without allocating 13M rows.
-    SafetyRepository(AppDatabase db, Executor executor, LongSupplier clock, long capacity) {
+    SafetyRepository(AppDatabase db, Executor executor, LongSupplier clock, long capacity,
+            MunicipalityMaster municipalities) {
         if (capacity < 1 || capacity > MAX_RECORDS) throw new IllegalArgumentException("capacity");
         this.db = Objects.requireNonNull(db);
         this.executor = Objects.requireNonNull(executor);
         this.clock = Objects.requireNonNull(clock);
         this.capacity = capacity;
+        this.municipalities = Objects.requireNonNull(municipalities);
     }
 
     /** Atomically start a local period and save self; refuses changes during an active period. */
     public CompletableFuture<String> startSession(int userId, int municipalityCode) {
         WireRecord self = new WireRecord(userId, municipalityCode);
+        self.requireMunicipalityName(municipalities);
         long confirmedAt = clock.getAsLong();
         long confirmedElapsed = SystemClock.elapsedRealtime();
         return CompletableFuture.supplyAsync(() -> db.runInTransaction(() -> {
@@ -77,17 +89,22 @@ public final class SafetyRepository {
         }), executor);
     }
 
-    public CompletableFuture<BatchResult> receive(String localSessionId, int userId, int municipalityCode) {
-        return applyReceivedBatch(localSessionId,
+    public CompletableFuture<BatchResult> receive(String localSessionId, String peerMasterVersion,
+            int userId, int municipalityCode) {
+        return applyReceivedBatch(localSessionId, peerMasterVersion,
                 Collections.singletonList(new WireRecord(userId, municipalityCode)));
     }
 
-    public CompletableFuture<BatchResult> applyReceivedBatch(String localSessionId, List<WireRecord> batch) {
+    public CompletableFuture<BatchResult> applyReceivedBatch(String localSessionId,
+            String peerMasterVersion, List<WireRecord> batch) {
+        municipalities.requireVersion(peerMasterVersion);
         Objects.requireNonNull(localSessionId);
         Objects.requireNonNull(batch);
         if (batch.isEmpty() || batch.size() > MAX_BATCH_SIZE) throw new IllegalArgumentException("batch size 1..256");
         List<WireRecord> copy = new ArrayList<>(batch);
-        for (WireRecord record : copy) Objects.requireNonNull(record);
+        for (WireRecord record : copy) {
+            Objects.requireNonNull(record).requireMunicipalityName(municipalities);
+        }
         return CompletableFuture.supplyAsync(() -> db.runInTransaction(() -> {
             SafetyDao dao = db.safetyDao();
             ActiveSession session = requireSession(localSessionId);
@@ -117,7 +134,7 @@ public final class SafetyRepository {
                         history.targetUserId = record.userId;
                         history.municipalityCode = record.municipalityCode;
                         history.displayNameSnapshot = target.displayName;
-                        // Municipality names require the future municipality master integration.
+                        history.municipalityNameSnapshot = record.requireMunicipalityName(municipalities);
                         history.firstReceivedAt = now;
                         dao.insertHistory(history);
                     }
@@ -155,6 +172,17 @@ public final class SafetyRepository {
         Objects.requireNonNull(target);
         return CompletableFuture.supplyAsync(
                 () -> db.runInTransaction(() -> db.safetyDao().insertWatch(target) != -1), executor);
+    }
+
+    /** Evaluate expiry when the queued read executes, not when it is enqueued. */
+    public CompletableFuture<List<NotificationHistory>> validHistories() {
+        return CompletableFuture.supplyAsync(
+                () -> db.safetyDao().validHistories(clock.getAsLong()), executor);
+    }
+
+    public CompletableFuture<Integer> deleteExpiredHistories() {
+        return CompletableFuture.supplyAsync(
+                () -> db.safetyDao().deleteExpiredHistories(clock.getAsLong()), executor);
     }
 
     private ActiveSession requireSession(String expectedId) {
