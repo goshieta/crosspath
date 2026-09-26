@@ -66,9 +66,10 @@ public class Sc06NotificationHistoryFragment extends Fragment {
         loadWatchStatuses();
     }
 
-    /** 受信状態一覧を UiData 経由で読み込み、表示する。 */
+    /** 受信状態一覧を UiData 経由で読み込み、表示する。表示のたびに checkSession を先に呼ぶ。 */
     private void loadWatchStatuses() {
         if (!isAdded()) return;
+        UiData.checkSession(status -> {}, error -> {});
         UiData.whenReady(repo ->
             UiData.onResult(repo.currentWatchStatuses(), statuses -> {
                 if (!isAdded() || getView() == null) return;

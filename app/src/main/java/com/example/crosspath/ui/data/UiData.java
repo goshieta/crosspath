@@ -5,12 +5,17 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
-import com.example.crosspath.data.ActiveSession;
 import com.example.crosspath.data.AppDatabase;
+import com.example.crosspath.data.KyushuMunicipalities;
 import com.example.crosspath.data.SafetyRepository;
+import com.example.crosspath.data.SessionStatus;
+import com.example.crosspath.data.SessionStopHandler;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -34,6 +39,17 @@ public final class UiData {
     private static final Handler mainHandler = new Handler(Looper.getMainLooper());
     private static final Object lock = new Object();
     private static final List<Consumer<SafetyRepository>> pendingCallbacks = new ArrayList<>();
+    private static volatile SessionStatus lastSessionStatus;
+
+    /** 停止要求IDの記録用。STOP_HANDLERより前に宣言する。 */
+    private static final Set<String> stoppedSessionIds = Collections.synchronizedSet(new HashSet<>());
+
+    /** ログとID記録のみのプレースホルダ。冪等・スレッド安全・非ブロッキング。 */
+    private static final SessionStopHandler STOP_HANDLER = sessionId -> {
+        Log.i(TAG, "session stop requested: " + sessionId);
+        stoppedSessionIds.add(sessionId);
+        // TODO(段階5: BLE/Service 実装時にこのIDの送信・広告・GATT・キューを停止する。DB削除では実通信は止まらない)
+    };
 
     /**
      * 冪等。application context を渡す。io スレッド上で AppDatabase / Executor を生成する。
@@ -48,7 +64,7 @@ public final class UiData {
             executor.execute(() -> {
                 try {
                     AppDatabase db = AppDatabase.open(appContext);
-                    SafetyRepository repo = new SafetyRepository(db, executor);
+                    SafetyRepository repo = new SafetyRepository(db, executor, KyushuMunicipalities.load(), STOP_HANDLER);
                     synchronized (lock) {
                         repository = repo;
                         initialized = true;
@@ -57,6 +73,8 @@ public final class UiData {
                         }
                         pendingCallbacks.clear();
                     }
+                    // init完了時に自動で一度 checkSession（起動直後の状態を確定）
+                    checkSession(status -> {}, error -> Log.e(TAG, "Initial checkSession failed", error));
                 } catch (Exception e) {
                     Log.e(TAG, "Failed to initialize", e);
                 }
@@ -113,30 +131,40 @@ public final class UiData {
     }
 
     /**
-     * 現在のセッション状態を非同期に読み、タイマーが有効かどうかをキャッシュする。
-     * 準備未完了またはエラー時は false に設定する。
+     * 期限判定と終了処理を伴う状態取得。結果はメインスレッドで受け取る。
+     * 準備未完了の場合は初期化完了後に自動的に実行する。
      */
-    public static void refreshTimerState() {
+    public static void checkSession(Consumer<SessionStatus> onStatus, Consumer<Throwable> onFailure) {
         synchronized (lock) {
             if (!initialized) {
-                // 初期化完了後にまとめて1回だけ取り直す（起動直後に誤って false で固定しない）
-                whenReady(repo -> refreshTimerState());
+                whenReady(repo -> checkSession(onStatus, onFailure));
                 return;
             }
         }
-        repository.currentSession().thenAccept(session -> {
-            boolean active = false;
-            if (session != null
-                    && "ACTIVE".equals(session.state)
-                    && session.endsAtWall > System.currentTimeMillis()) {
-                active = true;
-            }
-            timerActive.set(active);
+        repository.checkAndEndExpiredSession().thenAccept(status -> {
+            lastSessionStatus = status;
+            timerActive.set(status.canCommunicate);
+            mainHandler.post(() -> {
+                if (onStatus != null) onStatus.accept(status);
+            });
         }).exceptionally(e -> {
-            Log.e(TAG, "Failed to refresh timer state", e);
-            timerActive.set(false);
+            mainHandler.post(() -> {
+                if (onFailure != null) onFailure.accept(e);
+            });
             return null;
         });
+    }
+
+    /** 直近に取得した SessionStatus（未取得なら null）。 */
+    public static SessionStatus lastSessionStatus() {
+        return lastSessionStatus;
+    }
+
+    /**
+     * refreshTimerState は checkSession の薄いラッパ（呼び出し側は変更不要）。
+     */
+    public static void refreshTimerState() {
+        checkSession(status -> {}, error -> {});
     }
 
     /** キャッシュされたタイマー状態を同期・即時で返す。 */

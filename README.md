@@ -176,12 +176,14 @@ UI は DB を直接触らず、`ui/data/UiData.java` を通して `data/SafetyRe
 | SC01 | 名前を検証して `UserProfile.register()`（個人ID 1..0xFFFFFF をローカル生成・保存） |
 | SC02 | 自分の個人ID（`UserProfile`）を表示・コピー・共有。生存登録はタイマー作動中なら SC04、停止中は SC03 |
 | SC03 | `KyushuMunicipalities.prefectures()`（同梱の九州自治体マスター）で県・市町村を選択し、確定で `startSession()` |
-| SC04 | `currentSession()` から残り時間を1秒刻みで表示（0で SC02 へ）。`currentWatchStatuses()` で〇／ーを表示 |
+| SC04 | `checkSession()` で期限判定（`checkAndEndExpiredSession()`）を伴う状態取得→`SessionStatus` に応じて`remainingMillis` のスナップショットを1秒ずつ減らして表示（0で再確認→SC02 へ）。`currentWatchStatuses()` で〇／ーを表示 |
 | SC05 | `watchTargets()` / `addWatchTarget()` / `deleteWatchTarget()` で通知対象を CRUD（重複は DB の戻り値で判定） |
 | SC06 | `currentWatchStatuses()` で現在の通信期間の受信状態を表示 |
 
 - 〇＝`RECEIVED`（今回のACTIVE期間に受信）、ー＝`NOT_RECEIVED`、全件 `NO_ACTIVE_SESSION`＝「現在の通信期間なし」、0件＝「通知対象者が登録されていません」。
 - `currentWatchStatuses()` は履歴から導出しない。履歴表示（`validHistories()`）は今回の画面では未使用。
+- 期限判定は `checkAndEndExpiredSession()` 一本化。カウントダウンは `remainingMillis` の表示スナップショットであり、期限判定はデータ層が行う。
+- `SessionStopHandler` は現状ログとID記録のみのプレースホルダで、BLE/Service の実停止処理は未実装。
 
 ## 未実装の範囲
 
@@ -190,6 +192,6 @@ UI は DB を直接触らず、`ui/data/UiData.java` を通して `data/SafetyRe
 - BLE/GATT 通信（SC04 の通信状態表示は「通信期間中／未開始」の段階表示）
 - Foreground Service
 - Android 通知の発行（`NotificationHistory` の PENDING/POSTED/BLOCKED を使う Dispatcher）
-- 期限管理のうち履歴の100時間保持・明示クリーンアップの実行
 - 登録 API（サーバ側の本人登録）
 - ViewModel 層（現状は Fragment から `UiData` を直接呼ぶ薄い構成）
+- BLE/Service の実停止処理（`SessionStopHandler` の実通信停止）

@@ -36,6 +36,7 @@
     <string name="sc04_comm_active">通信期間中</string>
     <string name="sc04_comm_inactive">未開始</string>
     <string name="sc04_no_watch_targets">通知対象者が登録されていません</string>
+    <string name="sc04_block_clock_uncertain">端末の時刻を確認できないため通信を停止しました</string>
     <!-- SC05 -->
     <string name="sc05_title">通知対象者管理</string>
     <string name="sc05_hint_target_id">対象者の個人ID</string>
