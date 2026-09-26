@@ -28,6 +28,9 @@ public final class SafetyRepository {
 
     public enum Outcome { NEW_PERSON, DUPLICATE, ID_ALREADY_KNOWN, CAPACITY_REJECTED }
 
+    /** ENDED is returned only after the state change AND record deletion commit. */
+    public enum EndResult { NO_SESSION, STALE_SESSION, NOT_EXPIRED, ENDED, ALREADY_ENDED }
+
     /** Immutable notification intent. Delivery belongs to the caller, after successful completion. */
     public static final class NotificationRequest {
         public final long notificationId;
@@ -111,6 +114,7 @@ public final class SafetyRepository {
             dao.saveSession(session);
             dao.insert(new SafetyRecord(self.userId, self.municipalityCode, confirmedAt,
                     "SELF", session.sessionId, 1));
+            requireSession(session.sessionId);
             return session.sessionId;
         }), executor);
     }
@@ -172,12 +176,13 @@ public final class SafetyRepository {
                     outcomes.add(Outcome.NEW_PERSON);
                 }
             }
-            requireSession(localSessionId);
             if (inserted > 0) {
                 session.dataRevision = revision;
                 session.lastObservedWall = Math.max(session.lastObservedWall, now);
                 dao.saveSession(session);
             }
+            // Check after ALL writes too: expiry during receipt rolls back the whole batch.
+            requireSession(localSessionId);
             return new BatchResult(outcomes, inserted, notifications);
         }), executor);
     }
@@ -189,12 +194,59 @@ public final class SafetyRepository {
         }
         return CompletableFuture.supplyAsync(() -> db.runInTransaction(() -> {
             requireSession(localSessionId);
-            return db.safetyDao().page(localSessionId, lastUserId, limit);
+            List<WireRecord> page = db.safetyDao().page(localSessionId, lastUserId, limit);
+            requireSession(localSessionId);
+            return page;
         }), executor);
     }
 
+    /** Raw persistence snapshot for compatibility; use sessionStatus() for communication/UI gating. */
     public CompletableFuture<ActiveSession> currentSession() {
         return CompletableFuture.supplyAsync(() -> db.safetyDao().session(), executor);
+    }
+
+    /** Current gate and nonnegative remaining duration, evaluated when the queued read executes. */
+    public CompletableFuture<SessionStatus> sessionStatus() {
+        return CompletableFuture.supplyAsync(() -> db.runInTransaction(() ->
+                SessionStatus.evaluate(db.safetyDao().session(), clock.getAsLong())), executor);
+    }
+
+    /**
+     * End only the named expired session. Safe to retry and to call concurrently with receipt,
+     * session creation or another expiry call. Never rewrites the scheduled endsAtWall.
+     * DB errors complete exceptionally; neither the state change nor deletion then commits.
+     */
+    public CompletableFuture<EndResult> endExpiredSession(String expectedSessionId) {
+        Objects.requireNonNull(expectedSessionId);
+        return CompletableFuture.supplyAsync(() -> db.runInTransaction(() ->
+                endExpiredSessionInTransaction(expectedSessionId)), executor);
+    }
+
+    /**
+     * Startup/resume/communication-start hook. Checks and cleans up the current period in one
+     * transaction, returning its post-cleanup gate after commit. Does not schedule background work.
+     */
+    public CompletableFuture<SessionStatus> checkAndEndExpiredSession() {
+        return CompletableFuture.supplyAsync(() -> db.runInTransaction(() -> {
+            ActiveSession session = db.safetyDao().session();
+            if (session != null) endExpiredSessionInTransaction(session.sessionId);
+            return SessionStatus.evaluate(db.safetyDao().session(), clock.getAsLong());
+        }), executor);
+    }
+
+    private EndResult endExpiredSessionInTransaction(String expectedSessionId) {
+        SafetyDao dao = db.safetyDao();
+        ActiveSession session = dao.session();
+        if (session == null) return EndResult.NO_SESSION;
+        if (!session.sessionId.equals(expectedSessionId)) return EndResult.STALE_SESSION;
+        if (!"ACTIVE".equals(session.state)) return EndResult.ALREADY_ENDED;
+        long now = clock.getAsLong();
+        if (now < session.endsAtWall) return EndResult.NOT_EXPIRED;
+        if (dao.endExpiredSession(expectedSessionId, now) != 1) {
+            throw new IllegalStateException("Session changed during expiry transaction");
+        }
+        dao.deleteSessionRecords(expectedSessionId);
+        return EndResult.ENDED;
     }
 
     public CompletableFuture<Boolean> addWatchTarget(WatchTarget target) {
@@ -229,11 +281,12 @@ public final class SafetyRepository {
     public CompletableFuture<List<WatchStatus>> currentWatchStatuses() {
         return CompletableFuture.supplyAsync(() -> db.runInTransaction(() -> {
             ActiveSession session = db.safetyDao().session();
-            long now = clock.getAsLong();
-            boolean active = session != null && "ACTIVE".equals(session.state)
-                    && now >= session.startedAtWall && now < session.endsAtWall;
+            List<SafetyDao.WatchRow> rows = db.safetyDao().watchStatuses(
+                    session == null ? null : session.sessionId);
+            boolean active = SessionStatus.evaluate(session, clock.getAsLong()).state
+                    == SessionStatus.State.ACTIVE;
             List<WatchStatus> statuses = new ArrayList<>();
-            for (SafetyDao.WatchRow row : db.safetyDao().watchStatuses(active ? session.sessionId : null)) {
+            for (SafetyDao.WatchRow row : rows) {
                 statuses.add(new WatchStatus(row.targetUserId, row.displayName,
                         !active ? WatchStatus.State.NO_ACTIVE_SESSION
                                 : row.received ? WatchStatus.State.RECEIVED : WatchStatus.State.NOT_RECEIVED));
@@ -288,8 +341,7 @@ public final class SafetyRepository {
 
     private ActiveSession requireSession(String expectedId) {
         ActiveSession session = db.safetyDao().session();
-        if (session == null || !session.sessionId.equals(expectedId)
-                || !"ACTIVE".equals(session.state) || clock.getAsLong() >= session.endsAtWall) {
+        if (!SessionStatus.evaluate(session, clock.getAsLong()).canCommunicate(expectedId)) {
             throw new IllegalStateException("Inactive, stale or expired local session");
         }
         return session;

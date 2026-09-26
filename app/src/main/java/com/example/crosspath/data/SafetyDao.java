@@ -30,6 +30,14 @@ abstract class SafetyDao {
     @Query("DELETE FROM SafetyRecord")
     abstract void clearRecords();
 
+    @Query("DELETE FROM SafetyRecord WHERE localSessionId = :sessionId")
+    abstract int deleteSessionRecords(String sessionId);
+
+    @Query("UPDATE ActiveSession SET state = 'ENDED', relayEnabled = 0 "
+            + "WHERE singletonId = 1 AND sessionId = :sessionId AND state = 'ACTIVE' "
+            + "AND endsAtWall <= :now")
+    abstract int endExpiredSession(String sessionId, long now);
+
     @Query("SELECT * FROM WatchTarget WHERE targetUserId = :id")
     abstract WatchTarget watch(int id);
 
