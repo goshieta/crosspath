@@ -36,6 +36,12 @@ abstract class SafetyDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract long insertWatch(WatchTarget target);
 
+    @Query("SELECT * FROM WatchTarget ORDER BY targetUserId")
+    abstract List<WatchTarget> watchTargets();
+
+    @Query("DELETE FROM WatchTarget WHERE targetUserId = :id")
+    abstract int deleteWatchTarget(int id);
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract long insertHistory(NotificationHistory history);
 

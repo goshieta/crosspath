@@ -91,9 +91,10 @@ public class SafetyRepositoryTest {
     }
 
     @Test public void historyFailureRollsBackEntireBatchAndRevision() throws Exception {
+        await(repository.addWatchTarget(2, "earlier target"));
         await(repository.addWatchTarget(new WatchTarget(3, "target", now.get())));
         db.getOpenHelper().getWritableDatabase().execSQL(
-                "CREATE TRIGGER fail_history BEFORE INSERT ON NotificationHistory BEGIN SELECT RAISE(ABORT, 'injected failure'); END");
+                "CREATE TRIGGER fail_history BEFORE INSERT ON NotificationHistory WHEN NEW.targetUserId = 3 BEGIN SELECT RAISE(ABORT, 'injected failure'); END");
         CompletableFuture<SafetyRepository.BatchResult> future = repository.applyReceivedBatch(session, master.version,
                 Arrays.asList(new WireRecord(2, 20), new WireRecord(3, 30)));
         try {
@@ -105,8 +106,12 @@ public class SafetyRepositoryTest {
         assertTrue(future.isCompletedExceptionally());
         assertEquals(1, db.safetyDao().count());
         assertNull(db.safetyDao().find(2));
+        assertNull(db.safetyDao().find(3));
         assertEquals(0, db.safetyDao().validHistories(now.get()).size());
         assertEquals(1, db.safetyDao().session().dataRevision);
+        db.getOpenHelper().getWritableDatabase().execSQL("DROP TRIGGER fail_history");
+        assertEquals(2, await(repository.applyReceivedBatch(session, master.version,
+                Arrays.asList(new WireRecord(2, 20), new WireRecord(3, 30)))).notifications.size());
     }
 
     @Test public void concurrentReceivesInsertOnce() throws Exception {
@@ -158,6 +163,87 @@ public class SafetyRepositoryTest {
         assertEquals(1, db.safetyDao().count());
         assertNull(db.safetyDao().find(2));
         assertNull(db.safetyDao().find(3));
+        assertTrue(await(repository.validHistories()).isEmpty());
+        assertEquals(1, db.safetyDao().session().dataRevision);
+    }
+
+    @Test public void watchRegistrationIsInsertOnlySortedAndDeletionIsSelective() throws Exception {
+        assertTrue(await(repository.addWatchTarget(0xFFFFFF, "last")));
+        assertTrue(await(repository.addWatchTarget(2, "original")));
+        assertFalse(await(repository.addWatchTarget(2, "replacement")));
+        List<WatchTarget> targets = await(repository.watchTargets());
+        assertEquals(2, targets.size());
+        assertEquals(2, targets.get(0).targetUserId);
+        assertEquals("original", targets.get(0).displayName);
+        assertThrows(UnsupportedOperationException.class, () -> targets.clear());
+        await(repository.receive(session, master.version, 2, 20));
+        assertTrue(await(repository.deleteWatchTarget(2)));
+        assertFalse(await(repository.deleteWatchTarget(2)));
+        assertEquals(0xFFFFFF, await(repository.watchTargets()).get(0).targetUserId);
+        assertEquals(1, await(repository.validHistories()).size());
+        assertNotNull(db.safetyDao().find(2));
+        assertEquals(session, await(repository.currentSession()).sessionId);
+        assertTrue(await(repository.addWatchTarget(2, "registered again")));
+        assertFalse(await(repository.receive(session, master.version, 2, 20)).isNotificationRequired());
+        assertThrows(IllegalArgumentException.class, () -> repository.addWatchTarget(0, "invalid"));
+        assertThrows(IllegalArgumentException.class, () -> repository.deleteWatchTarget(0x1000000));
+    }
+
+    @Test public void notificationsAreCommittedImmutableAndOncePerSession() throws Exception {
+        assertFalse(await(repository.receive(session, master.version, 3, 30)).isNotificationRequired());
+        await(repository.addWatchTarget(2, "target"));
+        SafetyRepository.BatchResult first = await(repository.applyReceivedBatch(session, master.version,
+                Arrays.asList(new WireRecord(2, 20), new WireRecord(2, 20), new WireRecord(2, 99))));
+        assertTrue(first.isNotificationRequired());
+        assertEquals(1, first.notifications.size());
+        SafetyRepository.NotificationRequest notification = first.notifications.get(0);
+        NotificationHistory saved = await(repository.validHistories()).get(0);
+        assertEquals(saved.notificationId, notification.notificationId);
+        assertEquals("target", notification.displayName);
+        assertEquals("テスト自治体20", notification.municipalityName);
+        assertEquals(2, notification.targetUserId);
+        assertEquals(session, notification.localSessionId);
+        assertThrows(UnsupportedOperationException.class, () -> first.notifications.clear());
+        assertFalse(await(repository.receive(session, master.version, 2, 20)).isNotificationRequired());
+        assertEquals(1, await(repository.validHistories()).size());
+        now.set(db.safetyDao().session().endsAtWall);
+        String next = await(repository.startSession(1, 10));
+        assertTrue(await(repository.receive(next, master.version, 2, 30)).isNotificationRequired());
+        assertEquals(2, await(repository.validHistories()).size());
+    }
+
+    @Test public void concurrentWatchedReceivesNotifyOnlyOnce() throws Exception {
+        await(repository.addWatchTarget(2, "target"));
+        CompletableFuture<SafetyRepository.BatchResult> first = repository.receive(session, master.version, 2, 20);
+        CompletableFuture<SafetyRepository.BatchResult> second = repository.receive(session, master.version, 2, 30);
+        assertEquals(1, await(first).notifications.size() + await(second).notifications.size());
+        assertEquals(1, await(repository.validHistories()).size());
+    }
+
+    @Test public void cleanupUsesSpecifiedCutoffAndPreservesOtherTables() throws Exception {
+        await(repository.addWatchTarget(2, "target"));
+        await(repository.receive(session, master.version, 2, 20));
+        long end = db.safetyDao().session().endsAtWall;
+        long expiry = end + TimeUnit.HOURS.toMillis(100);
+        assertEquals(expiry, await(repository.validHistories()).get(0).historyExpiresAt);
+        assertEquals(0, (int) await(repository.deleteExpiredHistories(end)));
+        assertEquals(0, (int) await(repository.deleteExpiredHistories(expiry - 1)));
+        assertEquals(1, (int) await(repository.deleteExpiredHistories(expiry)));
+        assertEquals(0, (int) await(repository.deleteExpiredHistories(expiry + 1)));
+        assertEquals(session, await(repository.currentSession()).sessionId);
+        assertEquals(2, db.safetyDao().count());
+        assertEquals(1, await(repository.watchTargets()).size());
+        assertFalse(await(repository.receive(session, master.version, 2, 20)).isNotificationRequired());
+    }
+
+    @Test public void failureAfterHistoryInsertRollsBackNotificationAndRecord() throws Exception {
+        await(repository.addWatchTarget(2, "target"));
+        db.getOpenHelper().getWritableDatabase().execSQL(
+                "CREATE TRIGGER fail_revision BEFORE INSERT ON ActiveSession BEGIN SELECT RAISE(ABORT, 'revision failure'); END");
+        CompletableFuture<SafetyRepository.BatchResult> future = repository.receive(session, master.version, 2, 20);
+        assertThrows(java.util.concurrent.ExecutionException.class, () -> await(future));
+        assertTrue(future.isCompletedExceptionally());
+        assertNull(db.safetyDao().find(2));
         assertTrue(await(repository.validHistories()).isEmpty());
         assertEquals(1, db.safetyDao().session().dataRevision);
     }

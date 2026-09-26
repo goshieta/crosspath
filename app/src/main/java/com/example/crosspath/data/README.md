@@ -1,4 +1,44 @@
-# Room storage API (stage 2)
+# Room storage API (stages 2 and 4)
+
+## Stage 4 / SC04 integration
+
+All APIs below return CompletableFuture and use the supplied background executor.
+UI owners must dispatch results to their UI thread. SC04 renders `watchTargets()`;
+screen layouts and Android notification delivery are outside this data-layer change.
+
+```java
+repository.addWatchTarget(0x123456, "Family"); // true: inserted; false: ID already registered
+repository.watchTargets(); // immutable list of WatchTarget, ordered by targetUserId
+repository.deleteWatchTarget(0x123456); // true: deleted; false: not registered
+repository.deleteExpiredHistories(cutoffMillis); // expiry <= cutoff, returns deleted count
+```
+
+Personal IDs are 1..0xFFFFFF (0 remains reserved). Duplicate registration preserves
+the original name and timestamp. Removing a target preserves SafetyRecord and
+NotificationHistory. Registration does not notify retroactively for stored records.
+
+`receive()` and `applyReceivedBatch()` return `BatchResult.notifications`, an
+immutable list of immutable `NotificationRequest` values, and
+`isNotificationRequired()`. Each request contains the committed notificationId,
+localSessionId, targetUserId, displayName, municipalityCode, municipalityName and
+historyExpiresAt. Only successful future completion exposes these requests;
+exceptional completion has no success result and must not trigger a notification.
+The existing outcomes and inserted fields retain their meaning.
+
+There is one saved history and notification intent per newly received watched ID
+per local session. Repeated IDs (including within one batch or concurrent calls),
+known IDs with changed locations, self records and capacity rejections do not
+produce notification intents. A new session permits a new history for that ID.
+Expiry is session end + 100 hours; just before expiry is valid, exactly at expiry
+and afterwards is expired. Explicit cleanup deletes only NotificationHistory,
+preserving the session, SafetyRecord and WatchTarget. Even early explicit history
+cleanup does not make a stored person notify again in the current session.
+
+Room's existing unique (localSessionId, targetUserId) index remains unchanged.
+Unexpected history insert conflicts fail the whole transaction. Record inserts,
+history inserts and session revision updates roll back together on DB failure.
+Notification intents are not a delivery acknowledgement or an exactly-once
+Android notification service; delivery and retry policy belong to the caller.
 
 Create one AppDatabase for the application lifetime and pass a background
 ExecutorService to SafetyRepository. Do not call Room directly from UI or BLE.

@@ -28,14 +28,40 @@ public final class SafetyRepository {
 
     public enum Outcome { NEW_PERSON, DUPLICATE, ID_ALREADY_KNOWN, CAPACITY_REJECTED }
 
+    /** Immutable notification intent. Delivery belongs to the caller, after successful completion. */
+    public static final class NotificationRequest {
+        public final long notificationId;
+        public final String localSessionId;
+        public final int targetUserId;
+        public final String displayName;
+        public final int municipalityCode;
+        public final String municipalityName;
+        public final long historyExpiresAt;
+
+        private NotificationRequest(long notificationId, NotificationHistory history) {
+            this.notificationId = notificationId;
+            localSessionId = history.localSessionId;
+            targetUserId = history.targetUserId;
+            displayName = history.displayNameSnapshot;
+            municipalityCode = history.municipalityCode;
+            municipalityName = history.municipalityNameSnapshot;
+            historyExpiresAt = history.historyExpiresAt;
+        }
+    }
+
     public static final class BatchResult {
         /** Same order as input; CAPACITY_REJECTED is not a saved record. */
         public final List<Outcome> outcomes;
         public final int inserted;
-        BatchResult(List<Outcome> outcomes, int inserted) {
+        /** Only newly saved watched people, in input order; empty means no notification needed. */
+        public final List<NotificationRequest> notifications;
+        BatchResult(List<Outcome> outcomes, int inserted, List<NotificationRequest> notifications) {
             this.outcomes = Collections.unmodifiableList(new ArrayList<>(outcomes));
             this.inserted = inserted;
+            this.notifications = Collections.unmodifiableList(new ArrayList<>(notifications));
         }
+
+        public boolean isNotificationRequired() { return !notifications.isEmpty(); }
     }
 
     public SafetyRepository(AppDatabase db, Executor executor, MunicipalityMaster municipalities) {
@@ -113,6 +139,7 @@ public final class SafetyRepository {
             int inserted = 0;
             long revision = session.dataRevision + 1;
             List<Outcome> outcomes = new ArrayList<>(copy.size());
+            List<NotificationRequest> notifications = new ArrayList<>();
             for (WireRecord record : copy) {
                 SafetyRecord existing = dao.find(record.userId);
                 if (existing != null) {
@@ -136,7 +163,9 @@ public final class SafetyRepository {
                         history.displayNameSnapshot = target.displayName;
                         history.municipalityNameSnapshot = record.requireMunicipalityName(municipalities);
                         history.firstReceivedAt = now;
-                        dao.insertHistory(history);
+                        long historyId = dao.insertHistory(history);
+                        if (historyId == -1) throw new IllegalStateException("Unexpected history insert conflict");
+                        notifications.add(new NotificationRequest(historyId, history));
                     }
                     count++;
                     inserted++;
@@ -149,7 +178,7 @@ public final class SafetyRepository {
                 session.lastObservedWall = Math.max(session.lastObservedWall, now);
                 dao.saveSession(session);
             }
-            return new BatchResult(outcomes, inserted);
+            return new BatchResult(outcomes, inserted, notifications);
         }), executor);
     }
 
@@ -174,6 +203,24 @@ public final class SafetyRepository {
                 () -> db.runInTransaction(() -> db.safetyDao().insertWatch(target) != -1), executor);
     }
 
+    /** Insert-only: false means already registered; the original name is retained. */
+    public CompletableFuture<Boolean> addWatchTarget(int userId, String displayName) {
+        return addWatchTarget(new WatchTarget(userId, displayName, clock.getAsLong()));
+    }
+
+    /** SC04 display data, sorted by personal ID. Values and the returned list are immutable. */
+    public CompletableFuture<List<WatchTarget>> watchTargets() {
+        return CompletableFuture.supplyAsync(() -> Collections.unmodifiableList(
+                new ArrayList<>(db.safetyDao().watchTargets())), executor);
+    }
+
+    /** Deletes only the registration, preserving previously saved records and history. */
+    public CompletableFuture<Boolean> deleteWatchTarget(int userId) {
+        WireRecord.requireUserId(userId);
+        return CompletableFuture.supplyAsync(() -> db.runInTransaction(
+                () -> db.safetyDao().deleteWatchTarget(userId) != 0), executor);
+    }
+
     /** Evaluate expiry when the queued read executes, not when it is enqueued. */
     public CompletableFuture<List<NotificationHistory>> validHistories() {
         return CompletableFuture.supplyAsync(
@@ -183,6 +230,12 @@ public final class SafetyRepository {
     public CompletableFuture<Integer> deleteExpiredHistories() {
         return CompletableFuture.supplyAsync(
                 () -> db.safetyDao().deleteExpiredHistories(clock.getAsLong()), executor);
+    }
+
+    /** Deletes only histories whose expiry is <= cutoff, matching validHistories' exclusive bound. */
+    public CompletableFuture<Integer> deleteExpiredHistories(long cutoff) {
+        return CompletableFuture.supplyAsync(
+                () -> db.safetyDao().deleteExpiredHistories(cutoff), executor);
     }
 
     private ActiveSession requireSession(String expectedId) {
