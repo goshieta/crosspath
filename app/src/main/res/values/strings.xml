@@ -14,7 +14,6 @@
     <string name="state_no_session">現在の通信期間なし</string>
     <string name="action_register_watch_target">登録</string>
     <string name="hint_name">名前</string>
-    <string name="hint_id">個人ID</string>
     <!-- SC01 -->
     <string name="sc01_title">初回登録</string>
     <string name="sc01_hint_name">自分の名前を入力</string>
@@ -41,10 +40,6 @@
     <string name="sc05_register_success">登録しました</string>
     <!-- SC06 -->
     <string name="sc06_title">通知履歴</string>
-    <!-- 通信状態 -->
-    <string name="comm_state_not_started">未開始</string>
-    <string name="comm_state_running">通信中</string>
-    <string name="comm_state_blocked">通信不能</string>
     <string name="sc04_countdown_default">72時間00分00秒</string>
     <!-- %1$s は残り時間文字列 -->
     <string name="sc04_countdown_label">通信終了まで %1$s</string>
