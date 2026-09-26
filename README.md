@@ -50,12 +50,20 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 | SC05 | 通知対象者管理 | `Sc05WatchTargetFragment` | `fragment_sc05_watch_target.xml` |
 | SC06 | 通知履歴 | `Sc06NotificationHistoryFragment` | `fragment_sc06_notification_history.xml` |
 
+下部タブバー（ホーム／通知対象者／通知画面）は **SC02・SC04・SC05・SC06 で共通**。
+登録フローの SC01（初回登録）・SC03（市町村選択）には表示しない。
+タブの実装は `res/layout/include_bottom_tabs.xml` ＋ `res/menu/menu_bottom_tabs.xml` ＋ `ui/BottomTabs.java`。
+タブバーでホームを選ぶとタイマー作動中は SC04、それ以外は SC02 を表示する。
+
 ### 補助ファイル
 
 | 役割 | ファイル |
 |---|---|
 | 画面ID enum | `ui/Screen.java` |
 | テーマ適用ヘルパ | `ui/theme/ScreenThemes.java` |
+| 遷移ヘルパ | `ui/theme/NavTransitions.java` |
+| 出現アニメーションヘルパ | `ui/theme/ViewAnims.java` |
+| 下部タブバー | `ui/BottomTabs.java`・`res/layout/include_bottom_tabs.xml`・`res/menu/menu_bottom_tabs.xml` |
 | 暫定サンプルデータ | `ui/sample/SampleData.java` |
 | 共通リソース（色） | `res/values/colors.xml` |
 | 共通リソース（テーマ） | `res/values/themes.xml` |
@@ -75,7 +83,7 @@ OS のダーク設定にかかわらず画面ごとに固定テーマを適用�
 ## 画面遷移図
 
 ```
-SC01 (初回登録) ──登録成功──→ SC02 (ホーム)
+SC01 (初回登録) ──登録成功──→ SC02
                                     │
                            生存ボタン↓
                                     │
@@ -83,10 +91,72 @@ SC01 (初回登録) ──登録成功──→ SC02 (ホーム)
                                     │
                               確定→ SC04 (緊急時画面)
                                     │
-                     ┌──────────────┼──────────────┐
-                     ↓              ↓              ↓
-                  SC05 (対象者)  SC06 (履歴)  SC02 (期限終了)
+                        72時間経過↓
+                                    │
+                                SC02 (期限終了)
+
+ タブバー（SC02・SC04・SC05・SC06 で共通）
+   ┌──────────────┬──────────────┐
+   │   ホーム      │  通知対象者   │  通知画面     │
+   └──────────────┴──────────────┴─────────────┘
+      SC02/SC04         SC05            SC06
+      （3画面をタブで行き来）
 ```
+
+※ ホームタブはタイマー作動中は SC04、それ以外は SC02 を表示する。タブ切り替えは
+`replace`（バックスタックへ積まない）。SC01→SC02・SC02→SC03・SC03→SC04 は既存の階層遷移。
+
+## アイコンの運用
+
+アイコンは **Material Symbols**（Google Fonts 配信の公式アイコン）を Android の
+vector drawable XML に変換して取り込む。`material-icons-extended` は Jetpack Compose 専用のため
+Java＋XML の本プロジェクトでは使わない。
+
+取得は任意のアイコン名を変数に書けるツールで行う（既定アイコン一覧・--fill の詳細はツール冒頭を参照）：
+
+```bash
+# 既定アイコンの outline 版を取得
+python3 tools/fetch_material_symbols.py
+
+# タブ選択用の fill（塗り）版も併せて取得
+python3 tools/fetch_material_symbols.py --fill
+```
+
+出力は `app/src/main/res/drawable/ic_<name>_24.xml`（outline）／`ic_<name>_fill_24.xml`（fill）。
+アイコンの追加は【既定アイコン一覧】(下記) に名前を足すだけで再取得できる。
+
+### 既定アイコン一覧
+
+| 用途 | アイコン名（drawable） |
+|---|---|
+| タブ: ホーム | `ic_home_24` / `ic_home_fill_24` |
+| タブ: 通知対象者 | `ic_group_24` / `ic_group_fill_24` |
+| タブ: 通知画面 | `ic_notifications_24` / `ic_notifications_fill_24` |
+| 個人ID | `ic_badge_24` |
+| コピー / 共有 / 削除 | `ic_content_copy_24` / `ic_share_24` / `ic_delete_24` |
+| 生存登録 / 緊急 | `ic_sos_24` |
+| カウントダウン | `ic_timer_24` |
+| 通知履歴の見出し | `ic_history_24` |
+| 現在地 / 確定 | `ic_location_on_24` / `ic_check_24` |
+| 成功 / 失敗 | `ic_check_circle_24` / `ic_error_24` |
+| 通信状態 / Bluetooth無効 | `ic_sync_24` / `ic_bluetooth_disabled_24` |
+| 対象者 / 追加 | `ic_person_24` / `ic_person_add_24` |
+| 遷移（矢印） | `ic_arrow_forward_24`（`android:autoMirrored="true"`） |
+
+### 技術メモ
+
+Material Symbols の配信 SVG は `viewBox="0 -960 960 960"`（960 グリッド・y 軸が負）。
+Android vector には viewBox の最小座標が無いため、`viewportWidth/Height=960`（`width=24dp / height=24dp`）とし、
+全 `<path>` を `<group android:translateY="960">` で囲んで y を 0..960 へ移して vector drawable 化している
+（`viewportWidth=24` にすると y が -960..0 のまま残り、何も描画されない）。
+色は必ずテーマから取る（`app:iconTint` / `app:startIconTint` / `android:tint` に `?attr/...`）。
+
+## アニメーション方針
+
+画面遷移は Material の **SharedAxis**（タブ切り替え = X 軸、階層遷移 = Z 軸）を使う。
+画面内の出現は alpha＋translationY の**1回だけ**のアニメーション。
+**点滅・ループ・常時の警告アニメーションは使わない**（動きは「遷移」「出現」「操作」に紐づく1回のみ）。
+実装は `ui/theme/NavTransitions.java`（遷移）と `ui/theme/ViewAnims.java`（出現）に集約している。
 
 ## 今回のスコープ（UI のみ）
 
