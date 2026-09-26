@@ -26,12 +26,7 @@ public class SampleData {
             new SampleWatchTarget("9999999", "東京都港区赤坂九丁目七十九番地", true) // 長い名前
     );
 
-    /** 都道府県と市町村のサンプル。TODO(段階2: 同梱マスターデータに置換) */
-    public static final List<SamplePrefecture> PREFECTURES = Arrays.asList(
-            new SamplePrefecture("福岡県", Arrays.asList("飯塚市", "福岡市", "北九州市", "久留米市")),
-            new SamplePrefecture("広島県", Arrays.asList("東広島市", "広島市", "呉市", "尾道市")),
-            new SamplePrefecture("東京都", Arrays.asList("千代田区", "新宿区", "渋谷区", "港区"))
-    );
+
 
     /** 通信状態ダミー。TODO(段階5: BLE の実状態に置換) */
     public static final String DUMMY_COMM_STATE = "未開始";
@@ -57,14 +52,4 @@ public class SampleData {
         }
     }
 
-    /** 都道府県サンプル */
-    public static class SamplePrefecture {
-        public final String name;
-        public final List<String> municipalities;
-
-        public SamplePrefecture(String name, List<String> municipalities) {
-            this.name = name;
-            this.municipalities = municipalities;
-        }
-    }
 }

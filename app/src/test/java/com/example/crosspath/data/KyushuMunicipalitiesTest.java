@@ -2,6 +2,7 @@ package com.example.crosspath.data;
 
 import org.junit.Test;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import static org.junit.Assert.*;
 
@@ -43,5 +44,26 @@ public class KyushuMunicipalitiesTest {
         for (String version : new String[]{null, "", "kyushu-2026-09-26-v2"}) {
             assertThrows(IllegalArgumentException.class, () -> master.requireVersion(version));
         }
+    }
+
+    @Test public void prefecturesReturnsAll233EntriesInOrder() {
+        List<KyushuMunicipalities.Prefecture> prefs = KyushuMunicipalities.prefectures();
+        // 全都道府県の件数合計が 233
+        int total = 0;
+        for (KyushuMunicipalities.Prefecture p : prefs) {
+            total += p.municipalities.size();
+        }
+        assertEquals(233, total);
+
+        // 先頭が福岡県で code=1 → 北九州市
+        KyushuMunicipalities.Prefecture first = prefs.get(0);
+        assertEquals("福岡県", first.name);
+        KyushuMunicipalities.Entry firstEntry = first.municipalities.get(0);
+        assertEquals(1, firstEntry.code);
+        assertEquals("北九州市", firstEntry.name);
+
+        // 返るリストが不変
+        assertThrows(UnsupportedOperationException.class, () -> prefs.add(null));
+        assertThrows(UnsupportedOperationException.class, () -> first.municipalities.add(null));
     }
 }

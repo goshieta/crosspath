@@ -30,6 +30,7 @@
     <string name="sc03_label_location">現在地</string>
     <string name="sc03_hint_prefecture">県を選択</string>
     <string name="sc03_hint_municipality">市町村を選択</string>
+    <string name="sc03_error_start_failed">通信期間を開始できませんでした</string>
     <!-- SC04 -->
     <string name="sc04_title">緊急時画面</string>
     <!-- SC05 -->
