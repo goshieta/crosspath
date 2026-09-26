@@ -3,6 +3,7 @@ package com.example.crosspath.ui;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -11,6 +12,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.widget.TextViewCompat;
 import androidx.fragment.app.Fragment;
 
 import com.example.crosspath.MainActivity;
@@ -19,6 +21,7 @@ import com.example.crosspath.ui.sample.SampleData;
 import com.example.crosspath.ui.theme.ScreenThemes;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.color.MaterialColors;
 import com.google.android.material.snackbar.Snackbar;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
@@ -36,6 +39,7 @@ public class Sc01RegistrationFragment extends Fragment {
     private MaterialButton registerButton;
     private MaterialCardView idCard;
     private TextView idValueText;
+    private TextView resultText;
     private MaterialButton copyButton;
     private MaterialButton homeButton;
 
@@ -56,6 +60,7 @@ public class Sc01RegistrationFragment extends Fragment {
         nameEditText = view.findViewById(R.id.sc01_name_edit_text);
         registerButton = view.findViewById(R.id.sc01_button_register);
         idValueText = view.findViewById(R.id.sc01_id_value);
+        resultText = view.findViewById(R.id.sc01_result_text);
         idCard = view.findViewById(R.id.sc01_id_card);
         copyButton = view.findViewById(R.id.sc01_button_copy);
         homeButton = view.findViewById(R.id.sc01_button_home);
@@ -87,6 +92,15 @@ public class Sc01RegistrationFragment extends Fragment {
         // TODO(段階2: 登録APIを呼び出し、成功/失敗を判定する)
         // 暫定: 常に成功として SampleData.MY_USER_ID を表示
         idValueText.setText(SampleData.MY_USER_ID);
+
+        // 登録結果表示 仕様 §11.2(4)（成功アイコン付き）
+        resultText.setText(R.string.sc01_result_success);
+        TextViewCompat.setCompoundDrawableTintList(resultText, ColorStateList.valueOf(
+                MaterialColors.getColor(resultText, com.google.android.material.R.attr.colorPrimary)));
+        resultText.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                R.drawable.ic_check_circle_24, 0, 0, 0);
+        resultText.setVisibility(View.VISIBLE);
+
         idCard.setVisibility(View.VISIBLE);
         copyButton.setVisibility(View.VISIBLE);
         homeButton.setVisibility(View.VISIBLE);

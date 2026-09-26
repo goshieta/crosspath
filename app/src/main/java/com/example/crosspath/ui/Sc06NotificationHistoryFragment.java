@@ -16,6 +16,7 @@ import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
 import com.example.crosspath.ui.sample.SampleData;
 import com.example.crosspath.ui.theme.ScreenThemes;
+import com.example.crosspath.ui.theme.StatusBadge;
 
 import java.util.List;
 
@@ -91,15 +92,9 @@ public class Sc06NotificationHistoryFragment extends Fragment {
             SampleData.SampleWatchTarget item = items.get(position);
             holder.nameText.setText(item.displayName);
 
-            if (item.receivedThisSession) {
-                holder.statusText.setText(R.string.status_received);
-                holder.statusText.setContentDescription(
-                        holder.itemView.getContext().getString(R.string.status_received_desc));
-            } else {
-                holder.statusText.setText(R.string.status_not_received);
-                holder.statusText.setContentDescription(
-                        holder.itemView.getContext().getString(R.string.status_not_received_desc));
-            }
+            // SC04 と同一の〇／ー表示（共通ヘルパ） 仕様 §11.8
+            StatusBadge.bind(holder.statusText, holder.itemView,
+                    item.displayName, item.receivedThisSession);
         }
 
         @Override

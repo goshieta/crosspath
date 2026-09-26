@@ -12,6 +12,16 @@
     android:minHeight="@dimen/button_min_height"
     tools:context=".ui.Sc04EmergencyFragment">
 
+    <!-- 対象者の行頭アイコン（装飾） -->
+    <ImageView
+        android:id="@+id/item_target_icon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginEnd="@dimen/element_margin_small"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_person_24"
+        android:tint="?attr/colorOnSurfaceVariant" />
+
     <!-- 対象者名（長い場合は折り返し、右の状態表示を隠さない） 仕様 §11.12 -->
     <TextView
         android:id="@+id/item_target_name"
@@ -21,12 +31,10 @@
         android:layout_marginEnd="@dimen/element_margin_small"
         android:textAppearance="@style/TextAppearance.Material3.BodyLarge" />
 
-    <!-- 受信状態 仕様 §11.8 -->
+    <!-- 受信状態 仕様 §11.8（文字〇／ーは維持し、色は ViewHolder でテーマ属性から設定する） -->
     <TextView
         android:id="@+id/item_target_status"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+        style="@style/Widget.Crosspath.StatusBadge"
         android:importantForAccessibility="no" />
 
 </LinearLayout>

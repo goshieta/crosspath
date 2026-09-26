@@ -25,6 +25,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/section_margin_large"
+            android:drawableStart="@drawable/ic_location_on_24"
+            android:drawablePadding="@dimen/element_margin_small"
+            android:drawableTint="?attr/colorPrimary"
             android:text="@string/sc03_label_location"
             style="@style/TextAppearance.Material3.TitleLarge" />
 
@@ -81,6 +84,7 @@
             android:layout_marginBottom="@dimen/section_margin_large"
             android:enabled="false"
             android:text="@string/action_confirm"
+            app:icon="@drawable/ic_check_24"
             style="@style/Widget.Material3.Button" />
 
     </LinearLayout>

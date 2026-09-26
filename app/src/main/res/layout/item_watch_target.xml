@@ -11,6 +11,16 @@
     android:gravity="center_vertical"
     android:minHeight="@dimen/button_min_height">
 
+    <!-- 行頭アイコン（装飾） -->
+    <ImageView
+        android:id="@+id/item_watch_icon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginEnd="@dimen/element_margin_small"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_person_24"
+        android:tint="?attr/colorOnSurfaceVariant" />
+
     <!-- ID表示 -->
     <TextView
         android:id="@+id/item_watch_id"
@@ -34,6 +44,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/action_delete"
+        android:contentDescription="@string/action_delete"
+        app:icon="@drawable/ic_delete_24"
         style="@style/Widget.Material3.Button.TextButton" />
 
 </LinearLayout>

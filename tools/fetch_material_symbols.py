@@ -42,7 +42,7 @@ OUTLINE_ICONS = [
     "location_on", "check",
     "check_circle", "error",
     "sync", "bluetooth_disabled",
-    "person", "arrow_forward",
+    "person", "person_add", "arrow_forward",
 ]
 
 # --fill でタブ選択時に使う塗り版アイコン。

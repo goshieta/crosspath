@@ -36,6 +36,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="@color/dark_colorOnPrimaryContainer"
+                android:drawableStart="@drawable/ic_timer_24"
+                android:drawablePadding="@dimen/element_margin_small"
+                android:drawableTint="@color/dark_colorOnPrimaryContainer"
                 style="@style/TextAppearance.Material3.HeadlineLarge" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
@@ -46,6 +49,9 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/element_margin_medium"
+        android:drawableStart="@drawable/ic_sync_24"
+        android:drawablePadding="@dimen/element_margin_small"
+        android:drawableTint="?attr/colorOnSurfaceVariant"
         style="@style/TextAppearance.Material3.BodyMedium" />
 
     <!-- 通信期間なし表示 仕様 §11.8（ACTIVE 期間が無いときだけ表示） -->

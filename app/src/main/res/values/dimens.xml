@@ -7,4 +7,8 @@
     <dimen name="section_margin_large">24dp</dimen>
     <dimen name="button_min_height">48dp</dimen>
     <dimen name="card_corner_radius">16dp</dimen>
+    <!-- 生存登録のヒーローCTA（最も強い操作） 仕様 §11.3 -->
+    <dimen name="sc02_survival_button_min_height">120dp</dimen>
+    <!-- 一覧の〇／ーバッジ 仕様 §11.8 -->
+    <dimen name="status_badge_size">32dp</dimen>
 </resources>

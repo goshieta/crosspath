@@ -27,6 +27,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/element_margin_medium"
             style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            app:startIconDrawable="@drawable/ic_person_24"
             android:hint="@string/sc01_hint_name">
 
             <com.google.android.material.textfield.TextInputEditText
@@ -45,6 +46,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/element_margin_medium"
             android:text="@string/action_register"
+            app:icon="@drawable/ic_person_add_24"
             style="@style/Widget.Material3.Button" />
 
         <!-- 4. 登録結果表示 仕様 §11.2(4) -->
@@ -71,11 +73,26 @@
                 android:orientation="vertical"
                 android:padding="@dimen/element_margin_medium">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/sc01_id_card_title"
-                    style="@style/TextAppearance.Material3.BodyLarge" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_badge_24"
+                        android:tint="?attr/colorPrimary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="@dimen/element_margin_small"
+                        android:text="@string/sc01_id_card_title"
+                        style="@style/TextAppearance.Material3.BodyLarge" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/sc01_id_value"
@@ -95,6 +112,7 @@
             android:layout_marginTop="@dimen/element_margin_medium"
             android:visibility="gone"
             android:text="@string/action_copy"
+            app:icon="@drawable/ic_content_copy_24"
             style="@style/Widget.Material3.Button.OutlinedButton" />
 
         <!-- 7. ホームボタン 仕様 §11.2(7) -->
@@ -106,6 +124,7 @@
             android:layout_marginBottom="@dimen/section_margin_large"
             android:visibility="gone"
             android:text="@string/action_home"
+            app:icon="@drawable/ic_home_24"
             style="@style/Widget.Material3.Button" />
 
     </LinearLayout>

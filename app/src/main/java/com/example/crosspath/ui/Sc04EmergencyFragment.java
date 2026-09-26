@@ -16,6 +16,7 @@ import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
 import com.example.crosspath.ui.sample.SampleData;
 import com.example.crosspath.ui.theme.ScreenThemes;
+import com.example.crosspath.ui.theme.StatusBadge;
 
 import java.util.List;
 import java.util.Locale;
@@ -120,17 +121,9 @@ public class Sc04EmergencyFragment extends Fragment {
             SampleData.SampleWatchTarget item = items.get(position);
             holder.nameText.setText(item.displayName);
 
-            if (item.receivedThisSession) {
-                // 今回の期間で受信済み → 〇
-                holder.statusText.setText(R.string.status_received);
-                holder.statusText.setContentDescription(
-                        holder.itemView.getContext().getString(R.string.status_received_desc));
-            } else {
-                // 今回未受信 → ー
-                holder.statusText.setText(R.string.status_not_received);
-                holder.statusText.setContentDescription(
-                        holder.itemView.getContext().getString(R.string.status_not_received_desc));
-            }
+            // 〇／ーは文字を変えず、バッジの色と読み上げだけを共通ヘルパで設定する 仕様 §11.8
+            StatusBadge.bind(holder.statusText, holder.itemView,
+                    item.displayName, item.receivedThisSession);
         }
 
         @Override

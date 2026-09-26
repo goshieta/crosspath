@@ -23,6 +23,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/section_margin_large"
         style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        app:startIconDrawable="@drawable/ic_badge_24"
         android:hint="@string/sc05_hint_target_id">
 
         <com.google.android.material.textfield.TextInputEditText
@@ -41,6 +42,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/element_margin_small"
         style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        app:startIconDrawable="@drawable/ic_person_24"
         android:hint="@string/sc05_hint_target_name">
 
         <com.google.android.material.textfield.TextInputEditText
@@ -59,6 +61,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/element_margin_medium"
         android:text="@string/action_register_watch_target"
+        app:icon="@drawable/ic_person_add_24"
         style="@style/Widget.Material3.Button" />
 
     <!-- 4. 既登録者の一覧 仕様 §11.6 -->

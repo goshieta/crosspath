@@ -25,7 +25,18 @@
         android:text="@string/sc02_button_survival"
         style="@style/Widget.Crosspath.Button.Survival"
         android:textColor="@color/light_colorOnPrimaryContainer"
-        />
+        app:icon="@drawable/ic_sos_24"
+        app:iconGravity="textStart" />
+
+    <!-- 生存登録の補足（表示のみ。遷移先と挙動は §11.3 のまま） -->
+    <TextView
+        android:id="@+id/sc02_survival_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/element_margin_small"
+        android:text="@string/sc02_survival_hint"
+        android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+        android:textColor="?attr/colorOnSurfaceVariant" />
 
     <!-- IDカード 仕様 §11.3 -->
     <com.google.android.material.card.MaterialCardView
@@ -41,11 +52,26 @@
             android:orientation="vertical"
             android:padding="@dimen/element_margin_medium">
 
-            <TextView
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/label_my_id"
-                style="@style/TextAppearance.Material3.BodyLarge" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_badge_24"
+                    android:tint="?attr/colorPrimary" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/element_margin_small"
+                    android:text="@string/label_my_id"
+                    style="@style/TextAppearance.Material3.BodyLarge" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/sc02_id_value"
@@ -66,6 +92,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/action_copy"
+                    app:icon="@drawable/ic_content_copy_24"
                     style="@style/Widget.Material3.Button.OutlinedButton" />
 
                 <com.google.android.material.button.MaterialButton
@@ -74,6 +101,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="@dimen/element_margin_small"
                     android:text="@string/action_share"
+                    app:icon="@drawable/ic_share_24"
                     style="@style/Widget.Material3.Button.OutlinedButton" />
             </LinearLayout>
         </LinearLayout>

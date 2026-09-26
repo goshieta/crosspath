@@ -20,9 +20,11 @@
     <string name="sc01_error_blank_name">空白のみの名前は登録できません</string>
     <string name="sc01_id_card_title">あなたの個人ID</string>
     <string name="sc01_toast_copied">個人IDをコピーしました</string>
+    <string name="sc01_result_success">登録できました</string>
     <!-- SC02 -->
     <string name="sc02_title">ホーム</string>
     <string name="sc02_button_survival">生存登録</string>
+    <string name="sc02_survival_hint">タップして現在地を登録します。通信は市町村の確定後に始まります</string>
     <!-- SC03 -->
     <string name="sc03_title">市町村選択</string>
     <string name="sc03_label_location">現在地</string>
@@ -49,5 +51,7 @@
     <string name="status_received">〇</string>
     <string name="status_not_received">ー</string>
     <string name="status_received_desc">今回の期間で受信済み</string>
+    <!-- %1$s は対象者名、%2$s は受信状態の説明 -->
+    <string name="item_safety_row_desc">%1$s、%2$s</string>
     <string name="status_not_received_desc">今回の期間では未受信</string>
 </resources>
