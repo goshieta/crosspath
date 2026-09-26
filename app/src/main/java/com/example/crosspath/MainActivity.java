@@ -1,8 +1,10 @@
 package com.example.crosspath;
 
+import android.content.Context;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.util.TypedValue;
+import android.view.ContextThemeWrapper;
 import android.view.View;
 import android.view.Window;
 
@@ -68,18 +70,20 @@ public class MainActivity extends AppCompatActivity {
      * 画面のテーマに応じて FragmentContainerView とウィンドウの背景色を設定し、
      * ステータスバーのアイコン色を切り替える。仕様 §11.13 / §11.14
      *
+     * Activity テーマ自体は変更せず、その画面のテーマ Context から colorBackground
+     * （=colorSurface）を解決して FragmentContainerView・ウィンドウ背景に適用する。
+     *
      * @param screen 表示する画面（null の場合は何もしない）
      */
     public void applyScreenTheme(Screen screen) {
         if (screen == null) return;
 
-        // 画面のテーマで colorSurface を解決
+        // 画面のテーマ Context から colorBackground（=colorSurface）を解決
+        Context themedContext = new ContextThemeWrapper(this,
+                ScreenThemes.themeResFor(screen));
         TypedValue tv = new TypedValue();
-        int themeRes = ScreenThemes.themeResFor(screen);
-        getTheme().applyStyle(themeRes, false);
-
-        // colorSurface を解決（android:colorBackground は colorSurface と同値）
-        if (getTheme().resolveAttribute(android.R.attr.colorBackground, tv, true)) {
+        if (themedContext.getTheme().resolveAttribute(
+                android.R.attr.colorBackground, tv, true)) {
             int surfaceColor = tv.data;
             fragmentContainer.setBackgroundColor(surfaceColor);
             getWindow().setBackgroundDrawable(new ColorDrawable(surfaceColor));

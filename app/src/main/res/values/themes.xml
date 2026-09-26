@@ -21,6 +21,8 @@
         <item name="colorOnError">@color/light_colorOnError</item>
         <!-- Surface / Background -->
         <item name="android:colorBackground">@color/light_colorSurface</item>
+        <item name="colorSurface">@color/light_colorSurface</item>
+        <item name="colorOnBackground">@color/light_colorOnSurface</item>
         <item name="colorOnSurface">@color/light_colorOnSurface</item>
         <item name="colorSurfaceVariant">@color/light_colorSurfaceVariant</item>
         <item name="colorOnSurfaceVariant">@color/light_colorOnSurfaceVariant</item>
@@ -59,6 +61,8 @@
         <item name="colorOnError">@color/dark_colorOnError</item>
         <!-- Surface / Background -->
         <item name="android:colorBackground">@color/dark_colorSurface</item>
+        <item name="colorSurface">@color/dark_colorSurface</item>
+        <item name="colorOnBackground">@color/dark_colorOnSurface</item>
         <item name="colorOnSurface">@color/dark_colorOnSurface</item>
         <item name="colorSurfaceVariant">@color/dark_colorSurfaceVariant</item>
         <item name="colorOnSurfaceVariant">@color/dark_colorOnSurfaceVariant</item>
