@@ -1,19 +1,105 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:gravity="center"
     android:orientation="vertical"
     android:paddingLeft="@dimen/screen_margin_horizontal"
     android:paddingRight="@dimen/screen_margin_horizontal">
 
-    <!-- C4 で完全なレイアウトに置き換える -->
-    <TextView
-        android:layout_width="wrap_content"
+    <!-- 生存ボタン（最も強い操作） 仕様 §11.3 -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/sc02_button_survival"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/sc02_title"
-        style="@style/TextAppearance.Material3.TitleLarge" />
+        android:layout_marginTop="@dimen/section_margin_large"
+        android:text="@string/sc02_button_survival"
+        style="@style/Widget.Crosspath.Button.Survival"
+        android:textColor="@color/light_colorOnPrimaryContainer"
+        />
 
-    <!-- TODO(段階2): SC02 完全実装 -->
+    <!-- IDカード 仕様 §11.3 -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/sc02_id_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/element_margin_medium"
+        style="@style/Widget.Crosspath.Card">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/element_margin_medium">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/label_my_id"
+                style="@style/TextAppearance.Material3.BodyLarge" />
+
+            <TextView
+                android:id="@+id/sc02_id_value"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/element_margin_small"
+                android:textIsSelectable="true"
+                style="@style/TextAppearance.Material3.BodyLarge" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/element_margin_small"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/sc02_button_copy"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/action_copy"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/sc02_button_share"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/element_margin_small"
+                    android:text="@string/action_share"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- 下余白を広げて下部ボタンを下端へ押し出す -->
+    <View
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- 下部のボタン行 仕様 §11.3 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/section_margin_large"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sc02_button_watch_target"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="@dimen/element_margin_small"
+            android:text="@string/action_watch_target"
+            style="@style/Widget.Material3.Button.OutlinedButton" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sc02_button_notification_history"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="@dimen/element_margin_small"
+            android:text="@string/action_notification_history"
+            style="@style/Widget.Material3.Button.OutlinedButton" />
+    </LinearLayout>
 
 </LinearLayout>
