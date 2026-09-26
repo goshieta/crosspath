@@ -5,6 +5,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:paddingLeft="@dimen/screen_margin_horizontal"
+    android:background="?attr/colorSurface"
     android:paddingRight="@dimen/screen_margin_horizontal">
 
     <!-- 生存ボタン（最も強い操作） 仕様 §11.3 -->

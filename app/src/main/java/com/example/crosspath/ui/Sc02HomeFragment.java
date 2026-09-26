@@ -15,6 +15,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
 import com.example.crosspath.ui.sample.SampleData;
 import com.example.crosspath.ui.theme.ScreenThemes;
@@ -60,6 +61,10 @@ public class Sc02HomeFragment extends Fragment {
         // 個人IDを設定
         // TODO(段階2: 登録APIの返値に置換)
         idValueText.setText(SampleData.MY_USER_ID);
+
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).applyScreenTheme(Screen.SC02);
+        }
 
         survivalButton.setOnClickListener(v -> onSurvivalClicked());
         copyButton.setOnClickListener(v -> onCopyClicked());

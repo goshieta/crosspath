@@ -1,6 +1,9 @@
 package com.example.crosspath;
 
+import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
+import android.util.TypedValue;
+import android.view.View;
 import android.view.Window;
 
 import androidx.activity.EdgeToEdge;
@@ -11,7 +14,9 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.fragment.app.FragmentContainerView;
 
+import com.example.crosspath.ui.Screen;
 import com.example.crosspath.ui.Sc01RegistrationFragment;
+import com.example.crosspath.ui.theme.ScreenThemes;
 
 /**
  * 単一 Activity。仕様: 詳細設計書 v0.8 第11章
@@ -59,5 +64,29 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // getFragmentContainer() — 削除: 未使用のため
+    /**
+     * 画面のテーマに応じて FragmentContainerView とウィンドウの背景色を設定し、
+     * ステータスバーのアイコン色を切り替える。仕様 §11.13 / §11.14
+     *
+     * @param screen 表示する画面（null の場合は何もしない）
+     */
+    public void applyScreenTheme(Screen screen) {
+        if (screen == null) return;
+
+        // 画面のテーマで colorSurface を解決
+        TypedValue tv = new TypedValue();
+        int themeRes = ScreenThemes.themeResFor(screen);
+        getTheme().applyStyle(themeRes, false);
+
+        // colorSurface を解決（android:colorBackground は colorSurface と同値）
+        if (getTheme().resolveAttribute(android.R.attr.colorBackground, tv, true)) {
+            int surfaceColor = tv.data;
+            fragmentContainer.setBackgroundColor(surfaceColor);
+            getWindow().setBackgroundDrawable(new ColorDrawable(surfaceColor));
+        }
+
+        // ステータスバーのアイコン色
+        boolean darkTheme = screen.theme == Screen.ThemeVariant.DARK;
+        setStatusBarIconStyle(darkTheme);
+    }
 }

@@ -12,6 +12,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
 import com.example.crosspath.ui.sample.SampleData;
 import com.example.crosspath.ui.theme.ScreenThemes;
@@ -65,6 +66,10 @@ public class Sc03MunicipalityFragment extends Fragment {
 
         // 市町村ドロップダウンは初期状態で無効
         municipalityDropdown.setOnItemClickListener((parent, v, position, id) -> onMunicipalitySelected(position));
+
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).applyScreenTheme(Screen.SC03);
+        }
 
         confirmButton.setOnClickListener(v -> onConfirmClicked());
     }

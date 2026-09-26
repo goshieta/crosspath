@@ -4,6 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
+    android:background="?attr/colorSurface"
     android:paddingLeft="@dimen/screen_margin_horizontal"
     android:paddingRight="@dimen/screen_margin_horizontal">
 
@@ -26,18 +27,8 @@
                 android:id="@+id/sc04_countdown_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/sc04_countdown_default"
                 android:textColor="@color/dark_colorOnPrimaryContainer"
                 style="@style/TextAppearance.Material3.HeadlineLarge" />
-
-            <TextView
-                android:id="@+id/sc04_countdown_label"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/element_margin_small"
-                android:text="@string/sc04_countdown_label"
-                android:textColor="@color/dark_colorOnPrimaryContainer"
-                style="@style/TextAppearance.Material3.BodyLarge" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 

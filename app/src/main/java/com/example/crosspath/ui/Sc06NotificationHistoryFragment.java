@@ -12,6 +12,7 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
 import com.example.crosspath.ui.sample.SampleData;
 import com.example.crosspath.ui.theme.ScreenThemes;
@@ -55,6 +56,10 @@ public class Sc06NotificationHistoryFragment extends Fragment {
         } else {
             SafetyStatusAdapter adapter = new SafetyStatusAdapter(SampleData.WATCH_TARGETS);
             safetyList.setAdapter(adapter);
+        }
+
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).applyScreenTheme(Screen.SC06);
         }
 
         view.findViewById(R.id.sc06_button_home).setOnClickListener(v -> onHomeClicked());

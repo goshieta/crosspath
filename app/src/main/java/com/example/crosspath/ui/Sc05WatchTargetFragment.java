@@ -13,6 +13,7 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
 import com.example.crosspath.ui.sample.SampleData;
 import com.example.crosspath.ui.theme.ScreenThemes;
@@ -77,6 +78,10 @@ public class Sc05WatchTargetFragment extends Fragment {
         watchList.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new WatchTargetAdapter(registeredList);
         watchList.setAdapter(adapter);
+
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).applyScreenTheme(Screen.SC05);
+        }
 
         registerButton.setOnClickListener(v -> onRegisterClicked());
         homeButton.setOnClickListener(v -> onHomeClicked());

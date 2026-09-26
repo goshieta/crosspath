@@ -29,7 +29,6 @@ import java.util.Locale;
 public class Sc04EmergencyFragment extends Fragment {
 
     private TextView countdownText;
-    private TextView countdownLabel;
     private TextView commStatusText;
     private RecyclerView safetyList;
 
@@ -48,19 +47,17 @@ public class Sc04EmergencyFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         countdownText = view.findViewById(R.id.sc04_countdown_text);
-        countdownLabel = view.findViewById(R.id.sc04_countdown_label);
         commStatusText = view.findViewById(R.id.sc04_comm_status_text);
         safetyList = view.findViewById(R.id.sc04_safety_list);
 
-        // ステータスバーを明色に（SC04ダークテーマ）
+        // SC04 のダークテーマを画面全体へ適用
         if (getActivity() instanceof MainActivity) {
-            ((MainActivity) getActivity()).setStatusBarIconStyle(true);
+            ((MainActivity) getActivity()).applyScreenTheme(Screen.SC04);
         }
 
-        // カウントダウン固定文字列（仕様: タイマーは作らない）
+        // カウントダウン固定文字列（仕様: タイマーは作らない、1組で表示）
         // TODO(段階5: ExpiryManager の残り時間表示に置換)
-        countdownText.setText(R.string.sc04_countdown_default);
-        countdownLabel.setText(getString(R.string.sc04_countdown_label,
+        countdownText.setText(getString(R.string.sc04_countdown_label,
                 getString(R.string.sc04_countdown_default)));
 
         // 通信状態表示（固定ダミー）

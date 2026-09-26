@@ -11,6 +11,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
 import com.example.crosspath.ui.sample.SampleData;
 import com.example.crosspath.ui.theme.ScreenThemes;
@@ -64,6 +65,10 @@ public class Sc01RegistrationFragment extends Fragment {
         copyButton.setVisibility(View.GONE);
         homeButton.setVisibility(View.GONE);
         resultText.setVisibility(View.GONE);
+
+        if (getActivity() instanceof MainActivity) {
+            ((MainActivity) getActivity()).applyScreenTheme(Screen.SC01);
+        }
 
         registerButton.setOnClickListener(v -> onRegisterClicked());
         copyButton.setOnClickListener(v -> onCopyClicked());
