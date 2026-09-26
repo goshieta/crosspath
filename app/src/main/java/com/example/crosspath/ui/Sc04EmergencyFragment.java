@@ -163,6 +163,9 @@ public class Sc04EmergencyFragment extends Fragment {
     private void loadData() {
         if (!isAdded()) return;
         UiData.checkSession(status -> {
+            if (getActivity() instanceof MainActivity) {
+                ((MainActivity) getActivity()).onSessionStatus(status);
+            }
             if (!isAdded() || getView() == null) return;
             sessionStatus = status;
             render(status);

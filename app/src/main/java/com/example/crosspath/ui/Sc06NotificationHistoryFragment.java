@@ -38,7 +38,9 @@ public class Sc06NotificationHistoryFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        LayoutInflater themedInflater = ScreenThemes.themedLayoutInflater(inflater, Screen.SC06);
+        boolean emergency = getActivity() instanceof MainActivity
+                && ((MainActivity) getActivity()).isEmergencyMode();
+        LayoutInflater themedInflater = ScreenThemes.themedLayoutInflater(inflater, Screen.SC06, emergency);
         return themedInflater.inflate(R.layout.fragment_sc06_notification_history, container, false);
     }
 
@@ -69,7 +71,11 @@ public class Sc06NotificationHistoryFragment extends Fragment {
     /** 受信状態一覧を UiData 経由で読み込み、表示する。表示のたびに checkSession を先に呼ぶ。 */
     private void loadWatchStatuses() {
         if (!isAdded()) return;
-        UiData.checkSession(status -> {}, error -> {});
+        UiData.checkSession(status -> {
+            if (getActivity() instanceof MainActivity) {
+                ((MainActivity) getActivity()).onSessionStatus(status);
+            }
+        }, error -> {});
         UiData.whenReady(repo ->
             UiData.onResult(repo.currentWatchStatuses(), statuses -> {
                 if (!isAdded() || getView() == null) return;

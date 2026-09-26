@@ -166,6 +166,15 @@ Android vector には viewBox の最小座標が無いため、`viewportWidth/He
 **点滅・ループ・常時の警告アニメーションは使わない**（動きは「遷移」「出現」「操作」に紐づく1回のみ）。
 実装は `ui/theme/NavTransitions.java`（遷移）と `ui/theme/ViewAnims.java`（出現）に集約している。
 
+## 緊急時モード（Emergency Mode）
+
+緊急時モードは `SessionStatus.canCommunicate` が true の状態（ACTIVE かつ relayEnabled）を指す。
+
+- **モードの保持:** `MainActivity` が唯一の保持者（`emergencyMode` フィールド）。フラグメントは `onSessionStatus` で Activity に状態を通知する。
+- **モード中の画面:** ホームは常に SC04（緊急時画面）を表示する。SC05（通知対象者）・SC06（通知履歴）も緊急時ダークテーマ（`Theme.Survival.EmergencyDark`）で表示される。
+- **起動時の初期画面:** セッション状態（`UiData.checkSession`）が確定してから決定する。未登録→SC01、緊急時モード→SC04、それ以外→SC02。1200ms のフォールバックを設け、状態が返らない場合は未登録／登録済みで SC01/SC02 を出す。
+- **モード切替:** 緊急時モードが変わったらテーマを再適用し、必要に応じて現在の画面を作り直す（SC02↔SC04 の遷移、SC05/SC06 のテーマ再 inflate）。
+
 ## データ層との統合
 
 UI は DB を直接触らず、`ui/data/UiData.java` を通して `data/SafetyRepository` だけを呼ぶ
