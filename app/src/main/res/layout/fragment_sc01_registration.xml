@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorSurface"
+    android:paddingLeft="@dimen/screen_margin_horizontal"
+    android:paddingRight="@dimen/screen_margin_horizontal">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- MaterialToolbar 仕様 §11.12（SC01 タイトルはアプリ名） -->
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/sc01_toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="?attr/colorSurface"
+            app:title="@string/app_name" />
+
+        <!-- 2. 名前入力欄 仕様 §11.2(2) -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/sc01_name_input_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/element_margin_medium"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+            app:startIconDrawable="@drawable/ic_person_24"
+            android:hint="@string/sc01_hint_name">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/sc01_name_edit_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textPersonName"
+                android:imeOptions="actionDone"
+                style="@style/TextAppearance.Material3.BodyLarge" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <!-- 3. 登録ボタン 仕様 §11.2(3) -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sc01_button_register"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/element_margin_medium"
+            android:text="@string/action_register"
+            app:icon="@drawable/ic_person_add_24"
+            style="@style/Widget.Material3.Button" />
+
+        <!-- 4. 登録結果表示 仕様 §11.2(4) -->
+        <TextView
+            android:id="@+id/sc01_result_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/element_margin_medium"
+            android:visibility="gone"
+            style="@style/TextAppearance.Material3.BodyLarge" />
+
+        <!-- 5. 個人IDカード 仕様 §11.2(5) -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/sc01_id_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/element_margin_medium"
+            android:visibility="gone"
+            style="@style/Widget.Crosspath.Card">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/element_margin_medium">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_badge_24"
+                        android:tint="?attr/colorPrimary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="@dimen/element_margin_small"
+                        android:text="@string/sc01_id_card_title"
+                        style="@style/TextAppearance.Material3.BodyLarge" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/sc01_id_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/element_margin_small"
+                    android:textIsSelectable="true"
+                    style="@style/TextAppearance.Material3.BodyLarge" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 6. IDコピーボタン 仕様 §11.2(6) -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sc01_button_copy"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/element_margin_medium"
+            android:visibility="gone"
+            android:text="@string/action_copy"
+            app:icon="@drawable/ic_content_copy_24"
+            style="@style/Widget.Material3.Button.OutlinedButton" />
+
+        <!-- 7. ホームボタン 仕様 §11.2(7) -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/sc01_button_home"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/element_margin_medium"
+            android:layout_marginBottom="@dimen/section_margin_large"
+            android:visibility="gone"
+            android:text="@string/action_home"
+            app:icon="@drawable/ic_home_24"
+            style="@style/Widget.Material3.Button" />
+
+    </LinearLayout>
+</ScrollView>

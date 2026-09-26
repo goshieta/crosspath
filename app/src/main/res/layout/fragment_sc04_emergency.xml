@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="?attr/colorSurface"
+    android:paddingLeft="@dimen/screen_margin_horizontal"
+    android:paddingRight="@dimen/screen_margin_horizontal">
+
+    <!-- MaterialToolbar 仕様 §11.12 -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/sc04_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorSurface"
+        app:title="@string/sc04_title" />
+
+    <!-- カウントダウンカード 仕様 §11.5 赤カード＋白文字 -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/sc04_countdown_card"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/section_margin_large"
+        style="@style/Widget.Crosspath.Card"
+        app:cardBackgroundColor="@color/dark_colorPrimaryContainer">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/element_margin_medium">
+
+            <TextView
+                android:id="@+id/sc04_countdown_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/dark_colorOnPrimaryContainer"
+                android:drawableStart="@drawable/ic_timer_24"
+                android:drawablePadding="@dimen/element_margin_small"
+                android:drawableTint="@color/dark_colorOnPrimaryContainer"
+                style="@style/TextAppearance.Material3.HeadlineLarge" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- 通信状態表示 仕様 §11.5 -->
+    <TextView
+        android:id="@+id/sc04_comm_status_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/element_margin_medium"
+        android:drawableStart="@drawable/ic_sync_24"
+        android:drawablePadding="@dimen/element_margin_small"
+        android:drawableTint="?attr/colorOnSurfaceVariant"
+        style="@style/TextAppearance.Material3.BodyMedium" />
+
+    <!-- 通信不能理由 仕様 §11.5（BLE無効・権限不足・保存失敗など。両面テーマで解決できるよう色はテーマ属性から取る） -->
+    <TextView
+        android:id="@+id/sc04_block_reason"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/element_margin_small"
+        android:visibility="gone"
+        android:drawableStart="@drawable/ic_error_24"
+        android:drawablePadding="@dimen/element_margin_small"
+        android:drawableTint="?attr/colorError"
+        android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+
+    <!-- 通信期間なし表示 仕様 §11.8（ACTIVE 期間が無いときだけ表示） -->
+    <TextView
+        android:id="@+id/sc04_no_session_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/element_margin_medium"
+        android:visibility="gone"
+        android:text="@string/state_no_session"
+        style="@style/TextAppearance.Material3.BodyLarge" />
+
+    <!-- 通知希望者の生存確認報告（RecyclerView） 仕様 §11.5 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/sc04_safety_list"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="@dimen/element_margin_small"
+        android:clipToPadding="false"
+        android:paddingBottom="@dimen/element_margin_small"
+        android:layoutAnimation="@anim/layout_item_fade_slide"
+        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+    <!-- 下部タブバーは Activity 側（activity_main.xml）に置く。ここには置かない。 -->
+
+</LinearLayout>
