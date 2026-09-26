@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 情報カード 仕様 §11.13 16dp 角丸 -->
+    <style name="Widget.Crosspath.Card" parent="Widget.Material3.CardView.Filled">
+        <item name="shapeAppearance">@style/ShapeAppearance.Crosspath.Card</item>
+    </style>
+
+    <style name="ShapeAppearance.Crosspath.Card" parent="ShapeAppearance.Material3.Corner.Full">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">@dimen/card_corner_radius</item>
+    </style>
+
+    <!-- 生存ボタン用 Filled Tonal Button -->
+    <style name="Widget.Crosspath.Button.Survival" parent="Widget.Material3.Button.TonalButton">
+        <item name="backgroundTint">@color/light_colorPrimaryContainer</item>
+    </style>
+</resources>
