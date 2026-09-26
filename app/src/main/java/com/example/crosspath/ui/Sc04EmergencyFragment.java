@@ -30,6 +30,7 @@ public class Sc04EmergencyFragment extends Fragment {
 
     private TextView countdownText;
     private TextView commStatusText;
+    private TextView noSessionText;
     private RecyclerView safetyList;
 
     @Nullable
@@ -48,6 +49,7 @@ public class Sc04EmergencyFragment extends Fragment {
 
         countdownText = view.findViewById(R.id.sc04_countdown_text);
         commStatusText = view.findViewById(R.id.sc04_comm_status_text);
+        noSessionText = view.findViewById(R.id.sc04_no_session_text);
         safetyList = view.findViewById(R.id.sc04_safety_list);
 
         // SC04 のダークテーマを画面全体へ適用
@@ -68,8 +70,18 @@ public class Sc04EmergencyFragment extends Fragment {
 
         // RecyclerView 設定
         safetyList.setLayoutManager(new LinearLayoutManager(requireContext()));
-        SafetyStatusAdapter adapter = new SafetyStatusAdapter(SampleData.WATCH_TARGETS);
-        safetyList.setAdapter(adapter);
+
+        // TODO(段階2: Room の SafetyRecord 照合に置換)
+        if (SampleData.HAS_ACTIVE_SESSION) {
+            SafetyStatusAdapter adapter = new SafetyStatusAdapter(SampleData.WATCH_TARGETS);
+            safetyList.setAdapter(adapter);
+            safetyList.setVisibility(View.VISIBLE);
+            noSessionText.setVisibility(View.GONE);
+        } else {
+            // 通信期間なし（仕様 §11.8: 記号はすべてー、別途表示）
+            safetyList.setVisibility(View.GONE);
+            noSessionText.setVisibility(View.VISIBLE);
+        }
 
         // 下部ボタン
         // 仕様 §11.1: SC04 → SC05/SC06

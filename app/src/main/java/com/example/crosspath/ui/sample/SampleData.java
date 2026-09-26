@@ -36,6 +36,9 @@ public class SampleData {
     /** 通信状態ダミー。TODO(段階5: BLE の実状態に置換) */
     public static final String DUMMY_COMM_STATE = "未開始";
 
+    /** 現在 ACTIVE な通信期間があるか（true=あり、false=なし）。TODO(段階5: ActiveSession の有無に置換) */
+    public static final boolean HAS_ACTIVE_SESSION = true;
+
     private SampleData() {
         // インスタンス化禁止
     }

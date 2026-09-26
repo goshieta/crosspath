@@ -49,13 +49,14 @@ public class Sc06NotificationHistoryFragment extends Fragment {
         safetyList.setLayoutManager(new LinearLayoutManager(requireContext()));
 
         // TODO(段階2: Room の SafetyRecord 照合に置換)
-        if (SampleData.WATCH_TARGETS.isEmpty()) {
-            // 通信期間なし
-            safetyList.setVisibility(View.GONE);
-            noSessionText.setVisibility(View.VISIBLE);
-        } else {
+        if (SampleData.HAS_ACTIVE_SESSION) {
             SafetyStatusAdapter adapter = new SafetyStatusAdapter(SampleData.WATCH_TARGETS);
             safetyList.setAdapter(adapter);
+            safetyList.setVisibility(View.VISIBLE);
+            noSessionText.setVisibility(View.GONE);
+        } else {
+            safetyList.setVisibility(View.GONE);
+            noSessionText.setVisibility(View.VISIBLE);
         }
 
         if (getActivity() instanceof MainActivity) {

@@ -48,6 +48,16 @@
         android:layout_marginTop="@dimen/element_margin_medium"
         style="@style/TextAppearance.Material3.BodyMedium" />
 
+    <!-- 通信期間なし表示 仕様 §11.8（ACTIVE 期間が無いときだけ表示） -->
+    <TextView
+        android:id="@+id/sc04_no_session_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/element_margin_medium"
+        android:visibility="gone"
+        android:text="@string/state_no_session"
+        style="@style/TextAppearance.Material3.BodyLarge" />
+
     <!-- 通知希望者の生存確認報告（RecyclerView） 仕様 §11.5 -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/sc04_safety_list"
