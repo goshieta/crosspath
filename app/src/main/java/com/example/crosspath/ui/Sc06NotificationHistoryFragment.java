@@ -66,7 +66,6 @@ public class Sc06NotificationHistoryFragment extends Fragment {
             ((MainActivity) getActivity()).applyScreenTheme(Screen.SC06);
         }
 
-        BottomTabs.bind(view, this, Screen.SC06);
     }
 
     /**

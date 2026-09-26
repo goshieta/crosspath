@@ -113,7 +113,6 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <!-- 下部タブバー 仕様 §11.13 -->
-    <include layout="@layout/include_bottom_tabs" />
+    <!-- 下部タブバーは Activity 側（activity_main.xml）に置く。ここには置かない。 -->
 
 </LinearLayout>

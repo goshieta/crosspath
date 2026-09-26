@@ -38,7 +38,6 @@
         android:text="@string/state_no_session"
         style="@style/TextAppearance.Material3.BodyLarge" />
 
-    <!-- 下部タブバー 仕様 §11.13 -->
-    <include layout="@layout/include_bottom_tabs" />
+    <!-- 下部タブバーは Activity 側（activity_main.xml）に置く。ここには置かない。 -->
 
 </LinearLayout>

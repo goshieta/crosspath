@@ -99,7 +99,6 @@ public class Sc04EmergencyFragment extends Fragment {
             noSessionText.setVisibility(View.VISIBLE);
         }
 
-        BottomTabs.bind(view, this, Screen.SC04);
     }
 
     @Override

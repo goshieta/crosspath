@@ -73,7 +73,6 @@ public class Sc02HomeFragment extends Fragment {
             ViewAnims.appearOnce(survivalButton, view.findViewById(R.id.sc02_survival_hint), idCard);
         }
 
-        BottomTabs.bind(view, this, Screen.SC02);
     }
 
     private void onSurvivalClicked() {

@@ -1,7 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.fragment.app.FragmentContainerView xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  画面の外枠。下部タブバーは「ページ（Fragment）の中の部品」ではなく、
+  ページを切り替える Activity 側のコンポーネントとしてここに置く。
+  - fragment_container: 切り替わるページ本体（遷移アニメーションの対象）
+  - bottom_tabs_container: 画面下部に固定されるタブバー（遷移では動かない／全幅）
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/fragment_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity" />
+    android:orientation="vertical"
+    tools:context=".MainActivity">
+
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/fragment_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <FrameLayout
+        android:id="@+id/bottom_tabs_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+</LinearLayout>

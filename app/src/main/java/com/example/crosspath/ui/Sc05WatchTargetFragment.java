@@ -83,7 +83,6 @@ public class Sc05WatchTargetFragment extends Fragment {
 
         registerButton.setOnClickListener(v -> onRegisterClicked());
 
-        BottomTabs.bind(view, this, Screen.SC05);
     }
 
     private void onRegisterClicked() {
