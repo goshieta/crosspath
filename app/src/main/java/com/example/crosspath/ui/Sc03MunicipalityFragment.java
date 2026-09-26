@@ -15,7 +15,6 @@ import androidx.fragment.app.Fragment;
 import com.example.crosspath.R;
 import com.example.crosspath.ui.sample.SampleData;
 import com.example.crosspath.ui.theme.ScreenThemes;
-import com.google.android.material.snackbar.Snackbar;
 import com.google.android.material.textfield.MaterialAutoCompleteTextView;
 import com.google.android.material.textfield.TextInputLayout;
 
@@ -106,7 +105,11 @@ public class Sc03MunicipalityFragment extends Fragment {
             return;
         }
 
-        // TODO(段階6): 市町村確定 → タイマー・通信開始 → SC04 へ遷移
-        Snackbar.make(requireView(), "TODO(段階6): SC04 緊急時画面へ遷移", Snackbar.LENGTH_SHORT).show();
+        // 仕様 §11.1: 市町村確定 → タイマー・通信開始 → SC04
+        // TODO(段階6): タイマー・通信開始処理
+        getParentFragmentManager().beginTransaction()
+                .replace(R.id.fragment_container, new Sc04EmergencyFragment())
+                .addToBackStack(null)
+                .commit();
     }
 }

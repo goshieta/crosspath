@@ -41,8 +41,11 @@
     <string name="comm_state_not_started">未開始</string>
     <string name="comm_state_running">通信中</string>
     <string name="comm_state_blocked">通信不能</string>
+    <string name="sc04_countdown_default">72時間00分00秒</string>
     <!-- %1$s は残り時間文字列 -->
     <string name="sc04_countdown_label">通信終了まで %1$s</string>
+    <!-- %1$s は通信状態文字列 -->
+    <string name="sc04_comm_status">通信状態: %1$s</string>
     <!-- 〇／ー -->
     <string name="status_received">〇</string>
     <string name="status_not_received">ー</string>
