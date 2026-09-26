@@ -15,6 +15,7 @@ import androidx.fragment.app.Fragment;
 import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
 import com.example.crosspath.ui.sample.SampleData;
+import com.example.crosspath.ui.theme.NavTransitions;
 import com.example.crosspath.ui.theme.ScreenThemes;
 import com.google.android.material.textfield.MaterialAutoCompleteTextView;
 import com.google.android.material.textfield.TextInputLayout;
@@ -112,9 +113,13 @@ public class Sc03MunicipalityFragment extends Fragment {
 
         // 仕様 §11.1: 市町村確定 → タイマー・通信開始 → SC04
         // TODO(段階6): タイマー・通信開始処理
+        Sc04EmergencyFragment target = new Sc04EmergencyFragment();
+        NavTransitions.hierarchy(this, target, true);
         getParentFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, new Sc04EmergencyFragment())
+                .replace(R.id.fragment_container, target)
                 .addToBackStack(null)
                 .commit();
     }
+    // 注: SC03 から確定前の戻り（→SC02）はシステムの戻る（back stack の pop）で行われ、
+    // SC02→SC03 時に設定した return/reenter 遷移が Z 軸の逆方向で自動再生される。
 }

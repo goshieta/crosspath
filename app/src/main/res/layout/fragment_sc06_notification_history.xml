@@ -25,6 +25,7 @@
         android:layout_marginTop="@dimen/section_margin_large"
         android:clipToPadding="false"
         android:paddingBottom="@dimen/element_margin_small"
+        android:layoutAnimation="@anim/layout_item_fade_slide"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
     <!-- 通信期間なしの場合の表示（デフォルトはGONE） 仕様 §11.8 -->

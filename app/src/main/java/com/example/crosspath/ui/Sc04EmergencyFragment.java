@@ -9,6 +9,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -17,6 +18,7 @@ import com.example.crosspath.R;
 import com.example.crosspath.ui.sample.SampleData;
 import com.example.crosspath.ui.theme.ScreenThemes;
 import com.example.crosspath.ui.theme.StatusBadge;
+import com.example.crosspath.ui.theme.ViewAnims;
 
 import java.util.List;
 import java.util.Locale;
@@ -71,6 +73,13 @@ public class Sc04EmergencyFragment extends Fragment {
 
         // RecyclerView 設定
         safetyList.setLayoutManager(new LinearLayoutManager(requireContext()));
+        // 削除時に1回だけ動くアイテムアニメーターを明示
+        safetyList.setItemAnimator(new DefaultItemAnimator());
+
+        // カウントダウンカードの出現（初回表示のみ。再表示では動かさない）
+        if (savedInstanceState == null) {
+            ViewAnims.appearOnce(view.findViewById(R.id.sc04_countdown_card));
+        }
 
         // TODO(段階2: Room の SafetyRecord 照合に置換)
         if (SampleData.HAS_ACTIVE_SESSION) {

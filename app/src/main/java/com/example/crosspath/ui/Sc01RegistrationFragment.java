@@ -18,7 +18,9 @@ import androidx.fragment.app.Fragment;
 import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
 import com.example.crosspath.ui.sample.SampleData;
+import com.example.crosspath.ui.theme.NavTransitions;
 import com.example.crosspath.ui.theme.ScreenThemes;
+import com.example.crosspath.ui.theme.ViewAnims;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.color.MaterialColors;
@@ -104,6 +106,8 @@ public class Sc01RegistrationFragment extends Fragment {
         idCard.setVisibility(View.VISIBLE);
         copyButton.setVisibility(View.VISIBLE);
         homeButton.setVisibility(View.VISIBLE);
+        // IDカードの出現（登録成直後に1回だけ）
+        ViewAnims.appearOnce(idCard);
     }
 
     private void onCopyClicked() {
@@ -116,8 +120,10 @@ public class Sc01RegistrationFragment extends Fragment {
 
     private void onHomeClicked() {
         // 仕様 §11.1: SC01 → 登録成功 → SC02
+        Sc02HomeFragment target = new Sc02HomeFragment();
+        NavTransitions.hierarchy(this, target, true);
         getParentFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, new Sc02HomeFragment())
+                .replace(R.id.fragment_container, target)
                 .addToBackStack(null)
                 .commit();
     }

@@ -9,6 +9,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.DefaultItemAnimator;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -48,6 +49,7 @@ public class Sc06NotificationHistoryFragment extends Fragment {
         noSessionText = view.findViewById(R.id.sc06_no_session_text);
 
         safetyList.setLayoutManager(new LinearLayoutManager(requireContext()));
+        safetyList.setItemAnimator(new DefaultItemAnimator());
 
         // TODO(段階2: Room の SafetyRecord 照合に置換)
         if (SampleData.HAS_ACTIVE_SESSION) {

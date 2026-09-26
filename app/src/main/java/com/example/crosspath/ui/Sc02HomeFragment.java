@@ -18,7 +18,9 @@ import androidx.fragment.app.Fragment;
 import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
 import com.example.crosspath.ui.sample.SampleData;
+import com.example.crosspath.ui.theme.NavTransitions;
 import com.example.crosspath.ui.theme.ScreenThemes;
+import com.example.crosspath.ui.theme.ViewAnims;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.snackbar.Snackbar;
 
@@ -66,14 +68,21 @@ public class Sc02HomeFragment extends Fragment {
         copyButton.setOnClickListener(v -> onCopyClicked());
         shareButton.setOnClickListener(v -> onShareClicked());
 
+        // 生存ボタン・補足・IDカードの出現（初回表示のみ。再表示では動かさない）
+        if (savedInstanceState == null) {
+            ViewAnims.appearOnce(survivalButton, view.findViewById(R.id.sc02_survival_hint), idCard);
+        }
+
         BottomTabs.bind(view, this, Screen.SC02);
     }
 
     private void onSurvivalClicked() {
         // 仕様 §11.1: SC02 → 生存ボタン → SC03（タイマー未開始）
         // TODO(段階2: ACTIVE 期間有無を確認し、あれば SC04 へ誘導)
+        Sc03MunicipalityFragment target = new Sc03MunicipalityFragment();
+        NavTransitions.hierarchy(this, target, true);
         getParentFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, new Sc03MunicipalityFragment())
+                .replace(R.id.fragment_container, target)
                 .addToBackStack(null)
                 .commit();
     }

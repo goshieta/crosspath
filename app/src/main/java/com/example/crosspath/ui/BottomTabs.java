@@ -9,6 +9,7 @@ import androidx.fragment.app.Fragment;
 
 import com.example.crosspath.R;
 import com.example.crosspath.ui.sample.SampleData;
+import com.example.crosspath.ui.theme.NavTransitions;
 import com.google.android.material.navigation.NavigationBarView;
 
 /**
@@ -41,9 +42,12 @@ public final class BottomTabs {
                     // 現在表示中の画面と同じタブなら遷移しない。
                     return true;
                 }
+                Fragment targetFragment = newFragmentFor(target);
+                // タブ切り替え: X軸遷移（並び順 ホーム=0,通知対象者=1,通知画面=2 で方向決定）
+                NavTransitions.tab(fragment, targetFragment, tabIndex(target) >= tabIndex(current));
                 fragment.getParentFragmentManager()
                         .beginTransaction()
-                        .replace(R.id.fragment_container, newFragmentFor(target))
+                        .replace(R.id.fragment_container, targetFragment)
                         .commit();
                 return true;
             }
@@ -108,6 +112,18 @@ public final class BottomTabs {
         }
         // TODO(段階2: ACTIVE 期間の実データ判定に置換)
         return SampleData.HAS_ACTIVE_SESSION ? Screen.SC04 : Screen.SC02;
+    }
+
+    /** タブの並び順インデックス（ホーム=0, 通知対象者=1, 通知画面=2）。 */
+    private static int tabIndex(Screen screen) {
+        if (screen == Screen.SC05) {
+            return 1;
+        }
+        if (screen == Screen.SC06) {
+            return 2;
+        }
+        // SC02 / SC04 はホームタブ相当
+        return 0;
     }
 
     private static int selectedIdFor(Screen screen) {

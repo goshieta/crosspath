@@ -73,6 +73,7 @@
         android:layout_marginTop="@dimen/element_margin_small"
         android:clipToPadding="false"
         android:paddingBottom="@dimen/element_margin_small"
+        android:layoutAnimation="@anim/layout_item_fade_slide"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
     <!-- 下部タブバー 仕様 §11.13 -->
