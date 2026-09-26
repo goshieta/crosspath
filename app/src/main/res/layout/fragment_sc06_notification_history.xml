@@ -38,6 +38,6 @@
         style="@style/TextAppearance.Material3.BodyLarge" />
 
     <!-- 下部タブバー 仕様 §11.13 -->
-    <include android:id="@+id/sc06_bottom_tabs" layout="@layout/include_bottom_tabs" />
+    <include layout="@layout/include_bottom_tabs" />
 
 </LinearLayout>

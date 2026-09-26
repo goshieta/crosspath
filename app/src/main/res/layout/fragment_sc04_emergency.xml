@@ -70,6 +70,6 @@
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
     <!-- 下部タブバー 仕様 §11.13 -->
-    <include android:id="@+id/sc04_bottom_tabs" layout="@layout/include_bottom_tabs" />
+    <include layout="@layout/include_bottom_tabs" />
 
 </LinearLayout>

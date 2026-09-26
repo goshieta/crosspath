@@ -2,6 +2,7 @@ package com.example.crosspath.ui;
 
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 import androidx.fragment.app.Fragment;
@@ -21,12 +22,11 @@ public final class BottomTabs {
     private static final int TAB_FOCUSED_NOTIFICATIONS = R.id.tab_notifications;
 
     public static void bind(@NonNull View rootView, @NonNull Fragment fragment, @NonNull Screen current) {
-        View tabBarView = rootView.findViewById(R.id.bottom_tabs);
-        if (!(tabBarView instanceof NavigationBarView)) {
+        NavigationBarView navBar = findNavBar(rootView);
+        if (navBar == null) {
             // 将来 SC 以外で include されない場合の安全策。
             return;
         }
-        NavigationBarView navBar = (NavigationBarView) tabBarView;
         final boolean[] binding = { true };
         navBar.setOnItemSelectedListener(new NavigationBarView.OnItemSelectedListener() {
             @Override
@@ -51,6 +51,36 @@ public final class BottomTabs {
         navBar.setSelectedItemId(selectedIdFor(current));
         binding[0] = false;
         applySelectionIcons(navBar, selectedIdFor(current));
+    }
+
+    /**
+     * タブバーの実体を探す。
+     * <p>&lt;include android:id=...&gt; を付けるとインクルードされたルート View の id が
+     * 上書きされる Android の仕様のため、R.id.bottom_tabs で見つからなくても
+     * View ツリーを再帰的に走査して最初の NavigationBarView を返す。</p>
+     */
+    private static NavigationBarView findNavBar(View root) {
+        View byId = root.findViewById(R.id.bottom_tabs);
+        if (byId instanceof NavigationBarView) {
+            return (NavigationBarView) byId;
+        }
+        return searchNavBar(root);
+    }
+
+    private static NavigationBarView searchNavBar(View view) {
+        if (view instanceof NavigationBarView) {
+            return (NavigationBarView) view;
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                NavigationBarView found = searchNavBar(group.getChildAt(i));
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 
     private static void applySelectionIcons(NavigationBarView navBar, int selectedId) {
