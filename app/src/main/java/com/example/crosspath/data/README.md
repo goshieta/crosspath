@@ -1,4 +1,93 @@
-# Room storage API (stage 2)
+# Room storage API (stages 2 and 4)
+
+## Stage 4 / SC04 integration
+
+All APIs below return CompletableFuture and use the supplied background executor.
+UI owners must dispatch results to their UI thread. SC04/SC06 use `currentWatchStatuses()`;
+screen layouts and Android notification delivery are outside this data-layer change.
+
+```java
+repository.addWatchTarget(0x123456, "Family"); // true: inserted; false: ID already registered
+repository.watchTargets(); // immutable list of WatchTarget, ordered by targetUserId
+repository.deleteWatchTarget(0x123456); // true: deleted; false: not registered
+repository.currentWatchStatuses(); // current-period receipt marks, never history-derived
+repository.deleteExpiredHistories(); // expiry <= repository clock at execution
+```
+
+Personal IDs are 1..0xFFFFFF (0 remains reserved). Duplicate registration preserves
+the original name and timestamp. Removing a target preserves SafetyRecord and
+NotificationHistory. Registration does not notify retroactively for stored records.
+
+`receive()` and `applyReceivedBatch()` return `BatchResult.notifications`, an
+immutable list of immutable `NotificationRequest` values, and
+`isNotificationRequired()`. Each request contains the committed notificationId,
+localSessionId, targetUserId, displayName, municipalityCode, municipalityName and
+historyExpiresAt. Only successful future completion exposes these requests;
+exceptional completion has no success result and must not trigger a notification.
+The existing outcomes and inserted fields retain their meaning.
+
+There is one saved history and notification intent per newly received watched ID
+per local session. Repeated IDs (including within one batch or concurrent calls),
+known IDs with changed locations, self records and capacity rejections do not
+produce notification intents. A new session permits a new history for that ID.
+Expiry is session end + 100 hours; just before expiry is valid, exactly at expiry
+and afterwards is expired. Explicit cleanup deletes only NotificationHistory,
+preserving the session, SafetyRecord and WatchTarget. There is no public cutoff
+overload: callers cannot supply future timestamps to delete retained history early.
+Tests advance the injected clock using the package-private repository constructor.
+
+Room's existing unique (localSessionId, targetUserId) index remains unchanged.
+Unexpected history insert conflicts fail the whole transaction. Record inserts,
+history inserts and session revision updates roll back together on DB failure.
+Notification intents are not a delivery acknowledgement or an exactly-once
+Android notification service; delivery and retry policy belong to the caller.
+
+### Current receipt state versus historical display
+
+`currentWatchStatuses()` reads the session and a WatchTarget/SafetyRecord left join
+in one transaction, ordered by targetUserId. It returns immutable WatchStatus values:
+RECEIVED = 〇, NOT_RECEIVED = ー, NO_ACTIVE_SESSION = 現在の通信期間なし.
+Only RECEIVED-source records linked to the current ACTIVE session count; self
+registration does not count as receipt. Missing, ended, not-yet-started or expired
+sessions yield NO_ACTIVE_SESSION for every target, even when history remains.
+An empty list means no registered targets. Refresh on display and at session expiry.
+Registration after receipt can show RECEIVED without creating notification history.
+`watchTargets()` is registration data only. `validHistories()` is historical display
+across all sessions, filtered by retention expiry; NEVER derive current receipt
+marks from it. Neither read changes or automatically ends a session.
+
+### Repository / NotificationDispatcher contract
+
+1. The repository saves history as PENDING in the same transaction as receipt.
+2. Only after commit succeeds does it expose BatchResult.notifications. Failure
+   rolls back all writes and completes exceptionally, without a notification result.
+3. Dispatcher treats results as wake-up hints and retrieves durable work with
+   `findPendingNotifications(sessionId)`. This returns immutable notification
+   requests for that session, including past sessions, excluding expired history.
+   On startup, discover retained session IDs from `validHistories()`, deduplicate
+   them, then query each session's pending queue. Do not restrict recovery to the
+   current session. Removal of a watch registration does not cancel saved work.
+4. After successful posting, call `markNotificationPosted(notificationId)`.
+5. If notification permission is denied, call `markNotificationBlocked(notificationId)`.
+   BLOCKED_PERMISSION is terminal in this contract; permission grants do not
+   automatically replay old notifications. POSTED is also terminal.
+6. Crashes before posting or transient delivery errors leave PENDING for retry.
+   DB update failures complete exceptionally and leave PENDING for later recovery.
+7. Updates are atomic compare-and-set operations on unexpired PENDING rows only.
+   They return true after commit, false for absent, expired or finalized rows.
+   Repeated/conflicting acknowledgements cannot overwrite a finalized state.
+
+Dispatcher must serialize live and recovery work through one application-wide
+consumer; queue reads do not claim work. Use the persisted long notificationId as
+the stable identity: Android notification tag `crosspath-history:<notificationId>`
+and fixed integer ID 0. Do not truncate the long to an integer or generate a fresh
+identity on retry. Re-read pending work before issuing and recheck expiry. A crash
+between Android posting and DB acknowledgement can require reposting; reusing the
+same tag/ID replaces the existing notification instead of creating another entry.
+Dispatcher should suppress repeat alerts for updates. The DB and Android service
+cannot commit atomically, so exactly-once alerts are not guaranteed by this API.
+Actual Android posting, permission checks and Dispatcher implementation are out
+of scope; this section defines their required integration contract.
 
 Create one AppDatabase for the application lifetime and pass a background
 ExecutorService to SafetyRepository. Do not call Room directly from UI or BLE.

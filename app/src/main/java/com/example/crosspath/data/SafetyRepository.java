@@ -28,14 +28,40 @@ public final class SafetyRepository {
 
     public enum Outcome { NEW_PERSON, DUPLICATE, ID_ALREADY_KNOWN, CAPACITY_REJECTED }
 
+    /** Immutable notification intent. Delivery belongs to the caller, after successful completion. */
+    public static final class NotificationRequest {
+        public final long notificationId;
+        public final String localSessionId;
+        public final int targetUserId;
+        public final String displayName;
+        public final int municipalityCode;
+        public final String municipalityName;
+        public final long historyExpiresAt;
+
+        private NotificationRequest(long notificationId, NotificationHistory history) {
+            this.notificationId = notificationId;
+            localSessionId = history.localSessionId;
+            targetUserId = history.targetUserId;
+            displayName = history.displayNameSnapshot;
+            municipalityCode = history.municipalityCode;
+            municipalityName = history.municipalityNameSnapshot;
+            historyExpiresAt = history.historyExpiresAt;
+        }
+    }
+
     public static final class BatchResult {
         /** Same order as input; CAPACITY_REJECTED is not a saved record. */
         public final List<Outcome> outcomes;
         public final int inserted;
-        BatchResult(List<Outcome> outcomes, int inserted) {
+        /** Only newly saved watched people, in input order; empty means no notification needed. */
+        public final List<NotificationRequest> notifications;
+        BatchResult(List<Outcome> outcomes, int inserted, List<NotificationRequest> notifications) {
             this.outcomes = Collections.unmodifiableList(new ArrayList<>(outcomes));
             this.inserted = inserted;
+            this.notifications = Collections.unmodifiableList(new ArrayList<>(notifications));
         }
+
+        public boolean isNotificationRequired() { return !notifications.isEmpty(); }
     }
 
     public SafetyRepository(AppDatabase db, Executor executor, MunicipalityMaster municipalities) {
@@ -113,6 +139,7 @@ public final class SafetyRepository {
             int inserted = 0;
             long revision = session.dataRevision + 1;
             List<Outcome> outcomes = new ArrayList<>(copy.size());
+            List<NotificationRequest> notifications = new ArrayList<>();
             for (WireRecord record : copy) {
                 SafetyRecord existing = dao.find(record.userId);
                 if (existing != null) {
@@ -136,7 +163,9 @@ public final class SafetyRepository {
                         history.displayNameSnapshot = target.displayName;
                         history.municipalityNameSnapshot = record.requireMunicipalityName(municipalities);
                         history.firstReceivedAt = now;
-                        dao.insertHistory(history);
+                        long historyId = dao.insertHistory(history);
+                        if (historyId == -1) throw new IllegalStateException("Unexpected history insert conflict");
+                        notifications.add(new NotificationRequest(historyId, history));
                     }
                     count++;
                     inserted++;
@@ -149,7 +178,7 @@ public final class SafetyRepository {
                 session.lastObservedWall = Math.max(session.lastObservedWall, now);
                 dao.saveSession(session);
             }
-            return new BatchResult(outcomes, inserted);
+            return new BatchResult(outcomes, inserted, notifications);
         }), executor);
     }
 
@@ -174,15 +203,87 @@ public final class SafetyRepository {
                 () -> db.runInTransaction(() -> db.safetyDao().insertWatch(target) != -1), executor);
     }
 
-    /** Evaluate expiry when the queued read executes, not when it is enqueued. */
+    /** Insert-only: false means already registered; the original name is retained. */
+    public CompletableFuture<Boolean> addWatchTarget(int userId, String displayName) {
+        return addWatchTarget(new WatchTarget(userId, displayName, clock.getAsLong()));
+    }
+
+    /** SC04 display data, sorted by personal ID. Values and the returned list are immutable. */
+    public CompletableFuture<List<WatchTarget>> watchTargets() {
+        return CompletableFuture.supplyAsync(() -> Collections.unmodifiableList(
+                new ArrayList<>(db.safetyDao().watchTargets())), executor);
+    }
+
+    /** Deletes only the registration, preserving previously saved records and history. */
+    public CompletableFuture<Boolean> deleteWatchTarget(int userId) {
+        WireRecord.requireUserId(userId);
+        return CompletableFuture.supplyAsync(() -> db.runInTransaction(
+                () -> db.safetyDao().deleteWatchTarget(userId) != 0), executor);
+    }
+
+    /**
+     * SC04/SC06 current-period status, read atomically with the session and records.
+     * Expired/inactive/missing sessions yield NO_ACTIVE_SESSION for every target.
+     * SELF records are not received records. An empty list means no registered targets.
+     */
+    public CompletableFuture<List<WatchStatus>> currentWatchStatuses() {
+        return CompletableFuture.supplyAsync(() -> db.runInTransaction(() -> {
+            ActiveSession session = db.safetyDao().session();
+            long now = clock.getAsLong();
+            boolean active = session != null && "ACTIVE".equals(session.state)
+                    && now >= session.startedAtWall && now < session.endsAtWall;
+            List<WatchStatus> statuses = new ArrayList<>();
+            for (SafetyDao.WatchRow row : db.safetyDao().watchStatuses(active ? session.sessionId : null)) {
+                statuses.add(new WatchStatus(row.targetUserId, row.displayName,
+                        !active ? WatchStatus.State.NO_ACTIVE_SESSION
+                                : row.received ? WatchStatus.State.RECEIVED : WatchStatus.State.NOT_RECEIVED));
+            }
+            return Collections.unmodifiableList(statuses);
+        }), executor);
+    }
+
+    /**
+     * History display ONLY: includes unexpired histories across sessions.
+     * Never use this to determine current receipt marks; use currentWatchStatuses().
+     * Evaluate expiry when the queued read executes, not when it is enqueued.
+     */
     public CompletableFuture<List<NotificationHistory>> validHistories() {
         return CompletableFuture.supplyAsync(
                 () -> db.safetyDao().validHistories(clock.getAsLong()), executor);
     }
 
+    /** Uses the repository clock at execution; no caller-controlled future cutoff is accepted. */
     public CompletableFuture<Integer> deleteExpiredHistories() {
         return CompletableFuture.supplyAsync(
                 () -> db.safetyDao().deleteExpiredHistories(clock.getAsLong()), executor);
+    }
+
+    /** Recovery queue for any specified session (including past sessions), excluding expired rows. */
+    public CompletableFuture<List<NotificationRequest>> findPendingNotifications(String sessionId) {
+        Objects.requireNonNull(sessionId);
+        return CompletableFuture.supplyAsync(() -> {
+            List<NotificationRequest> pending = new ArrayList<>();
+            for (NotificationHistory history : db.safetyDao().pendingNotifications(sessionId, clock.getAsLong())) {
+                pending.add(new NotificationRequest(history.notificationId, history));
+            }
+            return Collections.unmodifiableList(pending);
+        }, executor);
+    }
+
+    /** Compare-and-set PENDING -> POSTED; false for missing, expired or already finalized rows. */
+    public CompletableFuture<Boolean> markNotificationPosted(long notificationId) {
+        return finishNotification(notificationId, "POSTED");
+    }
+
+    /** Compare-and-set PENDING -> BLOCKED_PERMISSION; no automatic retry after permission denial. */
+    public CompletableFuture<Boolean> markNotificationBlocked(long notificationId) {
+        return finishNotification(notificationId, "BLOCKED_PERMISSION");
+    }
+
+    private CompletableFuture<Boolean> finishNotification(long notificationId, String state) {
+        if (notificationId <= 0) throw new IllegalArgumentException("notificationId must be positive");
+        return CompletableFuture.supplyAsync(() -> db.runInTransaction(
+                () -> db.safetyDao().finishNotification(notificationId, state, clock.getAsLong()) == 1), executor);
     }
 
     private ActiveSession requireSession(String expectedId) {
