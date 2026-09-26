@@ -72,13 +72,7 @@
         android:paddingBottom="@dimen/element_margin_small"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
-    <!-- 5. ホームボタン 仕様 §11.6 -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/sc05_button_home"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/section_margin_large"
-        android:text="@string/action_home"
-        style="@style/Widget.Material3.Button.OutlinedButton" />
+    <!-- 6. 下部タブバー 仕様 §11.13 -->
+    <include android:id="@+id/sc05_bottom_tabs" layout="@layout/include_bottom_tabs" />
 
 </LinearLayout>

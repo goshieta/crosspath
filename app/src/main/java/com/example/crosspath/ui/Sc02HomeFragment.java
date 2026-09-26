@@ -34,8 +34,6 @@ public class Sc02HomeFragment extends Fragment {
     private TextView idValueText;
     private Button copyButton;
     private Button shareButton;
-    private Button watchTargetButton;
-    private Button notificationHistoryButton;
 
     @Nullable
     @Override
@@ -55,8 +53,6 @@ public class Sc02HomeFragment extends Fragment {
         idValueText = view.findViewById(R.id.sc02_id_value);
         copyButton = view.findViewById(R.id.sc02_button_copy);
         shareButton = view.findViewById(R.id.sc02_button_share);
-        watchTargetButton = view.findViewById(R.id.sc02_button_watch_target);
-        notificationHistoryButton = view.findViewById(R.id.sc02_button_notification_history);
 
         // 個人IDを設定
         // TODO(段階2: 登録APIの返値に置換)
@@ -69,8 +65,8 @@ public class Sc02HomeFragment extends Fragment {
         survivalButton.setOnClickListener(v -> onSurvivalClicked());
         copyButton.setOnClickListener(v -> onCopyClicked());
         shareButton.setOnClickListener(v -> onShareClicked());
-        watchTargetButton.setOnClickListener(v -> onWatchTargetClicked());
-        notificationHistoryButton.setOnClickListener(v -> onNotificationHistoryClicked());
+
+        BottomTabs.bind(view, this, Screen.SC02);
     }
 
     private void onSurvivalClicked() {
@@ -97,21 +93,5 @@ public class Sc02HomeFragment extends Fragment {
         shareIntent.setType("text/plain");
         shareIntent.putExtra(Intent.EXTRA_TEXT, id);
         startActivity(Intent.createChooser(shareIntent, getString(R.string.action_share)));
-    }
-
-    private void onWatchTargetClicked() {
-        // 仕様 §11.1: SC02 → SC05
-        getParentFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, new Sc05WatchTargetFragment())
-                .addToBackStack(null)
-                .commit();
-    }
-
-    private void onNotificationHistoryClicked() {
-        // 仕様 §11.1: SC02 → SC06
-        getParentFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, new Sc06NotificationHistoryFragment())
-                .addToBackStack(null)
-                .commit();
     }
 }

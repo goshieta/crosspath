@@ -29,7 +29,7 @@ import java.util.Set;
 /**
  * SC05 通知対象者管理画面。仕様: 詳細設計書 v0.8 §11.6
  *
- * ID・名前入力、登録（成功時 Snackbar）、既登録一覧（各行に削除）、ホーム（→ SC02）。
+ * ID・名前入力、登録（成功時 Snackbar）、既登録一覧（各行に削除）、タブバー（ホーム・通知）。
  */
 public class Sc05WatchTargetFragment extends Fragment {
 
@@ -39,7 +39,6 @@ public class Sc05WatchTargetFragment extends Fragment {
     private TextInputEditText nameEditText;
     private MaterialButton registerButton;
     private RecyclerView watchList;
-    private MaterialButton homeButton;
 
     /** メモリ上の登録リスト（画面内のみ）。TODO(段階2: Room の WatchTarget に置換) */
     private final List<SampleData.SampleWatchTarget> registeredList = new ArrayList<>();
@@ -65,7 +64,6 @@ public class Sc05WatchTargetFragment extends Fragment {
         nameEditText = view.findViewById(R.id.sc05_name_edit_text);
         registerButton = view.findViewById(R.id.sc05_button_register);
         watchList = view.findViewById(R.id.sc05_watch_list);
-        homeButton = view.findViewById(R.id.sc05_button_home);
 
         // サンプルデータで初期化
         for (SampleData.SampleWatchTarget target : SampleData.WATCH_TARGETS) {
@@ -82,7 +80,8 @@ public class Sc05WatchTargetFragment extends Fragment {
         }
 
         registerButton.setOnClickListener(v -> onRegisterClicked());
-        homeButton.setOnClickListener(v -> onHomeClicked());
+
+        BottomTabs.bind(view, this, Screen.SC05);
     }
 
     private void onRegisterClicked() {
@@ -125,15 +124,6 @@ public class Sc05WatchTargetFragment extends Fragment {
 
         // 成功通知は Snackbar（一時的な結果: 仕様 §11.12 が許容）
         Snackbar.make(requireView(), R.string.sc05_register_success, Snackbar.LENGTH_SHORT).show();
-    }
-
-    private void onHomeClicked() {
-        // 仕様 §11.1: タイマー作動中は SC04、未開始・終了済みは SC02
-        // TODO(段階5: タイマー状態を確認し SC02/SC04 を切り替え)
-        getParentFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, new Sc02HomeFragment())
-                .addToBackStack(null)
-                .commit();
     }
 
     /**

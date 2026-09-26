@@ -24,7 +24,7 @@ import java.util.Locale;
  * SC04 緊急時画面。仕様: 詳細設計書 v0.8 §11.5
  *
  * 専用ダークテーマで表示。カウントダウンカード（固定文字列）、通信状態表示、
- * 通知対象者の〇／ー一覧、下部にSC05/SC06への遷移ボタン。
+ * 通知対象者の〇／ー一覧、下部タブバー。
  */
 public class Sc04EmergencyFragment extends Fragment {
 
@@ -83,23 +83,7 @@ public class Sc04EmergencyFragment extends Fragment {
             noSessionText.setVisibility(View.VISIBLE);
         }
 
-        // 下部ボタン
-        // 仕様 §11.1: SC04 → SC05/SC06
-        view.findViewById(R.id.sc04_button_watch_target)
-                .setOnClickListener(v -> {
-                    getParentFragmentManager().beginTransaction()
-                            .replace(R.id.fragment_container, new Sc05WatchTargetFragment())
-                            .addToBackStack(null)
-                            .commit();
-                });
-        // 仕様 §11.1: SC04 → SC06
-        view.findViewById(R.id.sc04_button_notification_history)
-                .setOnClickListener(v -> {
-                    getParentFragmentManager().beginTransaction()
-                            .replace(R.id.fragment_container, new Sc06NotificationHistoryFragment())
-                            .addToBackStack(null)
-                            .commit();
-                });
+        BottomTabs.bind(view, this, Screen.SC04);
     }
 
     @Override

@@ -79,36 +79,13 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- 下余白を広げて下部ボタンを下端へ押し出す -->
+    <!-- 下余白を広げてコンテンツを上部に寄せる -->
     <View
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <!-- 下部のボタン行 仕様 §11.3 -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/section_margin_large"
-        android:orientation="horizontal">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/sc02_button_watch_target"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginEnd="@dimen/element_margin_small"
-            android:text="@string/action_watch_target"
-            style="@style/Widget.Material3.Button.OutlinedButton" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/sc02_button_notification_history"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="@dimen/element_margin_small"
-            android:text="@string/action_notification_history"
-            style="@style/Widget.Material3.Button.OutlinedButton" />
-    </LinearLayout>
+    <!-- 下部タブバー 仕様 §11.13 -->
+    <include android:id="@+id/sc02_bottom_tabs" layout="@layout/include_bottom_tabs" />
 
 </LinearLayout>

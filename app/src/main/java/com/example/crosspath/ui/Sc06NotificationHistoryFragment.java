@@ -23,7 +23,7 @@ import java.util.List;
  * SC06 通知履歴画面。仕様: 詳細設計書 v0.8 §11.7
  *
  * 通知対象者の今回の通信期間での生存情報受信状況を一覧表示。
- * ホームボタンで SC02 へ戻る（TODO: タイマー状態の確認）。
+ * タブバーからホーム（SC02）へ遷移。
  */
 public class Sc06NotificationHistoryFragment extends Fragment {
 
@@ -63,16 +63,7 @@ public class Sc06NotificationHistoryFragment extends Fragment {
             ((MainActivity) getActivity()).applyScreenTheme(Screen.SC06);
         }
 
-        view.findViewById(R.id.sc06_button_home).setOnClickListener(v -> onHomeClicked());
-    }
-
-    private void onHomeClicked() {
-        // 仕様 §11.1: タイマー作動中は SC04、未開始・終了済みは SC02
-        // TODO(段階5: タイマー状態を確認し SC02/SC04 を切り替え)
-        getParentFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, new Sc02HomeFragment())
-                .addToBackStack(null)
-                .commit();
+        BottomTabs.bind(view, this, Screen.SC06);
     }
 
     /**

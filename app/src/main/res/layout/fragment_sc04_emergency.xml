@@ -69,30 +69,7 @@
         android:paddingBottom="@dimen/element_margin_small"
         app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
 
-    <!-- 下部のボタン行 仕様 §11.5 -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/section_margin_large"
-        android:orientation="horizontal">
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/sc04_button_watch_target"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginEnd="@dimen/element_margin_small"
-            android:text="@string/action_watch_target"
-            style="@style/Widget.Material3.Button.TonalButton" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/sc04_button_notification_history"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="@dimen/element_margin_small"
-            android:text="@string/action_notification_history"
-            style="@style/Widget.Material3.Button.OutlinedButton" />
-    </LinearLayout>
+    <!-- 下部タブバー 仕様 §11.13 -->
+    <include android:id="@+id/sc04_bottom_tabs" layout="@layout/include_bottom_tabs" />
 
 </LinearLayout>

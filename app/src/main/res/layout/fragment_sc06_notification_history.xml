@@ -37,13 +37,7 @@
         android:text="@string/state_no_session"
         style="@style/TextAppearance.Material3.BodyLarge" />
 
-    <!-- ホームボタン 仕様 §11.7 -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/sc06_button_home"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/section_margin_large"
-        android:text="@string/action_home"
-        style="@style/Widget.Material3.Button.OutlinedButton" />
+    <!-- 下部タブバー 仕様 §11.13 -->
+    <include android:id="@+id/sc06_bottom_tabs" layout="@layout/include_bottom_tabs" />
 
 </LinearLayout>
