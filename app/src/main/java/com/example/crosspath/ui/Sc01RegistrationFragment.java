@@ -17,7 +17,7 @@ import androidx.fragment.app.Fragment;
 
 import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
-import com.example.crosspath.ui.sample.SampleData;
+import com.example.crosspath.ui.data.UserProfile;
 import com.example.crosspath.ui.theme.NavTransitions;
 import com.example.crosspath.ui.theme.ScreenThemes;
 import com.example.crosspath.ui.theme.ViewAnims;
@@ -91,9 +91,9 @@ public class Sc01RegistrationFragment extends Fragment {
         }
         nameInputLayout.setError(null);
 
-        // TODO(段階2: 登録APIを呼び出し、成功/失敗を判定する)
-        // 暫定: 常に成功として SampleData.MY_USER_ID を表示
-        idValueText.setText(SampleData.MY_USER_ID);
+        // 実データとして名前登録 + 個人IDを表示
+        UserProfile.register(requireContext(), name);
+        idValueText.setText(String.valueOf(UserProfile.personalId(requireContext())));
 
         // 登録結果表示 仕様 §11.2(4)（成功アイコン付き）
         resultText.setText(R.string.sc01_result_success);

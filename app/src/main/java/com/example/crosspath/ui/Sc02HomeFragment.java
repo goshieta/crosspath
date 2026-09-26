@@ -17,7 +17,8 @@ import androidx.fragment.app.Fragment;
 
 import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
-import com.example.crosspath.ui.sample.SampleData;
+import com.example.crosspath.ui.data.UiData;
+import com.example.crosspath.ui.data.UserProfile;
 import com.example.crosspath.ui.theme.NavTransitions;
 import com.example.crosspath.ui.theme.ScreenThemes;
 import com.example.crosspath.ui.theme.ViewAnims;
@@ -56,9 +57,8 @@ public class Sc02HomeFragment extends Fragment {
         copyButton = view.findViewById(R.id.sc02_button_copy);
         shareButton = view.findViewById(R.id.sc02_button_share);
 
-        // 個人IDを設定
-        // TODO(段階2: 登録APIの返値に置換)
-        idValueText.setText(SampleData.MY_USER_ID);
+        // 個人IDを設定（実データ）
+        idValueText.setText(String.valueOf(UserProfile.personalId(requireContext())));
 
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).applyScreenTheme(Screen.SC02);
@@ -76,9 +76,13 @@ public class Sc02HomeFragment extends Fragment {
     }
 
     private void onSurvivalClicked() {
-        // 仕様 §11.1: SC02 → 生存ボタン → SC03（タイマー未開始）
-        // TODO(段階2: ACTIVE 期間有無を確認し、あれば SC04 へ誘導)
-        Sc03MunicipalityFragment target = new Sc03MunicipalityFragment();
+        // 仕様 §11.1: SC02 → 生存ボタン → ACTIVE 期間有無で分岐
+        Fragment target;
+        if (UiData.isTimerActive()) {
+            target = new Sc04EmergencyFragment();
+        } else {
+            target = new Sc03MunicipalityFragment();
+        }
         NavTransitions.hierarchy(this, target, true);
         getParentFragmentManager().beginTransaction()
                 .replace(R.id.fragment_container, target)

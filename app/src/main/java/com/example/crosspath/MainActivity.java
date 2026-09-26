@@ -23,6 +23,9 @@ import androidx.fragment.app.FragmentContainerView;
 import com.example.crosspath.ui.BottomTabs;
 import com.example.crosspath.ui.Screen;
 import com.example.crosspath.ui.Sc01RegistrationFragment;
+import com.example.crosspath.ui.Sc02HomeFragment;
+import com.example.crosspath.ui.data.UiData;
+import com.example.crosspath.ui.data.UserProfile;
 import com.example.crosspath.ui.theme.NavTransitions;
 import com.example.crosspath.ui.theme.ScreenThemes;
 import com.google.android.material.color.MaterialColors;
@@ -57,6 +60,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        UiData.init(getApplicationContext());
+        UiData.refreshTimerState();
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
@@ -73,12 +78,21 @@ public class MainActivity extends AppCompatActivity {
             return insets;
         });
 
-        // 初回起動時は SC01 を表示（TODO(段階2): 本人ID有無により SC01 か SC02 かを判定）
+        // 初回起動時は本人ID有無により SC01 か SC02 かを判定
         if (savedInstanceState == null) {
+            Fragment initialFragment = UserProfile.isRegistered(this)
+                    ? new Sc02HomeFragment()
+                    : new Sc01RegistrationFragment();
             getSupportFragmentManager().beginTransaction()
-                    .replace(R.id.fragment_container, new Sc01RegistrationFragment())
+                    .replace(R.id.fragment_container, initialFragment)
                     .commit();
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        UiData.refreshTimerState();
     }
 
     /**
