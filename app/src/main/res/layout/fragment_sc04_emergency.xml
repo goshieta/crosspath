@@ -54,6 +54,18 @@
         android:drawableTint="?attr/colorOnSurfaceVariant"
         style="@style/TextAppearance.Material3.BodyMedium" />
 
+    <!-- 通信不能理由 仕様 §11.5（BLE無効・権限不足・保存失敗など。両面テーマで解決できるよう色はテーマ属性から取る） -->
+    <TextView
+        android:id="@+id/sc04_block_reason"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/element_margin_small"
+        android:visibility="gone"
+        android:drawableStart="@drawable/ic_error_24"
+        android:drawablePadding="@dimen/element_margin_small"
+        android:drawableTint="?attr/colorError"
+        android:textAppearance="@style/TextAppearance.Material3.BodyMedium" />
+
     <!-- 通信期間なし表示 仕様 §11.8（ACTIVE 期間が無いときだけ表示） -->
     <TextView
         android:id="@+id/sc04_no_session_text"

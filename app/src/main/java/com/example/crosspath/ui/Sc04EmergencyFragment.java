@@ -33,6 +33,7 @@ public class Sc04EmergencyFragment extends Fragment {
 
     private TextView countdownText;
     private TextView commStatusText;
+    private TextView blockReasonText;
     private TextView noSessionText;
     private RecyclerView safetyList;
 
@@ -52,8 +53,13 @@ public class Sc04EmergencyFragment extends Fragment {
 
         countdownText = view.findViewById(R.id.sc04_countdown_text);
         commStatusText = view.findViewById(R.id.sc04_comm_status_text);
+        blockReasonText = view.findViewById(R.id.sc04_block_reason);
         noSessionText = view.findViewById(R.id.sc04_no_session_text);
         safetyList = view.findViewById(R.id.sc04_safety_list);
+
+        // 通信不能理由は初期非表示（§11.5: BLE無効・権限不足・保存失敗のときだけ表示）
+        // TODO(段階5: BLE の実状態に応じて理由文言を設定・表示する)
+        blockReasonText.setVisibility(View.GONE);
 
         // SC04 のダークテーマを画面全体へ適用
         if (getActivity() instanceof MainActivity) {
