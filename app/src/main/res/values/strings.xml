@@ -28,6 +28,9 @@
     <string name="sc02_button_survival">生存登録</string>
     <!-- SC03 -->
     <string name="sc03_title">市町村選択</string>
+    <string name="sc03_label_location">現在地</string>
+    <string name="sc03_hint_prefecture">県を選択</string>
+    <string name="sc03_hint_municipality">市町村を選択</string>
     <!-- SC04 -->
     <string name="sc04_title">緊急時画面</string>
     <!-- SC05 -->

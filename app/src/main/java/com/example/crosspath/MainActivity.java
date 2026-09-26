@@ -59,7 +59,5 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public FragmentContainerView getFragmentContainer() {
-        return fragmentContainer;
-    }
+    // getFragmentContainer() — 削除: 未使用のため
 }
