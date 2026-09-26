@@ -12,13 +12,13 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- 1. アプリ名 仕様 §11.2(1) -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/section_margin_large"
-            android:text="@string/app_name"
-            style="@style/TextAppearance.Material3.TitleLarge" />
+        <!-- MaterialToolbar 仕様 §11.12（SC01 タイトルはアプリ名） -->
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/sc01_toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="?attr/colorSurface"
+            app:title="@string/app_name" />
 
         <!-- 2. 名前入力欄 仕様 §11.2(2) -->
         <com.google.android.material.textfield.TextInputLayout

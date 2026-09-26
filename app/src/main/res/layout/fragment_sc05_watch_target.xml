@@ -8,6 +8,14 @@
     android:paddingLeft="@dimen/screen_margin_horizontal"
     android:paddingRight="@dimen/screen_margin_horizontal">
 
+    <!-- MaterialToolbar 仕様 §11.12（SC05 もタイトル表示のため共通部品として設置） -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/sc05_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorSurface"
+        app:title="@string/sc05_title" />
+
     <!-- 1. ID入力欄 仕様 §11.6 -->
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/sc05_id_input_layout"
@@ -63,13 +71,6 @@
         style="@style/TextAppearance.Material3.BodyMedium" />
 
     <!-- 4. 既登録者の一覧 仕様 §11.6 -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/element_margin_medium"
-        android:text="@string/sc05_title"
-        style="@style/TextAppearance.Material3.TitleMedium" />
-
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/sc05_watch_list"
         android:layout_width="match_parent"

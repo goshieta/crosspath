@@ -8,6 +8,14 @@
     android:paddingLeft="@dimen/screen_margin_horizontal"
     android:paddingRight="@dimen/screen_margin_horizontal">
 
+    <!-- MaterialToolbar 仕様 §11.12 -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/sc04_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorSurface"
+        app:title="@string/sc04_title" />
+
     <!-- カウントダウンカード 仕様 §11.5 赤カード＋白文字 -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/sc04_countdown_card"
@@ -41,13 +49,6 @@
         style="@style/TextAppearance.Material3.BodyMedium" />
 
     <!-- 通知希望者の生存確認報告（RecyclerView） 仕様 §11.5 -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/element_margin_medium"
-        android:text="@string/sc04_title"
-        style="@style/TextAppearance.Material3.TitleMedium" />
-
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/sc04_safety_list"
         android:layout_width="match_parent"

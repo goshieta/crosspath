@@ -8,6 +8,14 @@
     android:background="?attr/colorSurface"
     android:paddingRight="@dimen/screen_margin_horizontal">
 
+    <!-- MaterialToolbar 仕様 §11.12 -->
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/sc02_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorSurface"
+        app:title="@string/sc02_title" />
+
     <!-- 生存ボタン（最も強い操作） 仕様 §11.3 -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/sc02_button_survival"
