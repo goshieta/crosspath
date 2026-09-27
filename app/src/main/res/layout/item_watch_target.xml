@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:paddingLeft="@dimen/element_margin_medium"
+    android:paddingRight="@dimen/element_margin_medium"
+    android:paddingTop="@dimen/element_margin_small"
+    android:paddingBottom="@dimen/element_margin_small"
+    android:gravity="center_vertical"
+    android:minHeight="@dimen/button_min_height">
+
+    <!-- 行頭アイコン（装飾） -->
+    <ImageView
+        android:id="@+id/item_watch_icon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginEnd="@dimen/element_margin_small"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_person_24"
+        app:tint="?attr/colorOnSurfaceVariant" />
+
+    <!-- ID表示 -->
+    <TextView
+        android:id="@+id/item_watch_id"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="@dimen/element_margin_small"
+        style="@style/TextAppearance.Material3.BodyMedium" />
+
+    <!-- 名前表示 -->
+    <TextView
+        android:id="@+id/item_watch_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginEnd="@dimen/element_margin_small"
+        style="@style/TextAppearance.Material3.BodyLarge" />
+
+    <!-- 削除ボタン 仕様 §11.6 -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/item_watch_delete"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/action_delete"
+        android:contentDescription="@string/action_delete"
+        app:icon="@drawable/ic_delete_24"
+        style="@style/Widget.Material3.Button.TextButton" />
+
+</LinearLayout>

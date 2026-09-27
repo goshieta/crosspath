@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 情報カード 仕様 §11.13 16dp 角丸 -->
+    <style name="Widget.Crosspath.Card" parent="Widget.Material3.CardView.Filled">
+        <item name="shapeAppearance">@style/ShapeAppearance.Crosspath.Card</item>
+    </style>
+
+    <style name="ShapeAppearance.Crosspath.Card" parent="ShapeAppearance.Material3.Corner.Full">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">@dimen/card_corner_radius</item>
+    </style>
+
+    <!-- 生存登録のヒーローCTA 仕様 §11.3 / §11.12（最も強い操作） -->
+    <style name="Widget.Crosspath.Button.Survival" parent="Widget.Material3.Button.TonalButton">
+        <item name="backgroundTint">@color/light_colorPrimaryContainer</item>
+        <item name="iconTint">@color/light_colorOnPrimaryContainer</item>
+        <item name="android:textAppearance">@style/TextAppearance.Material3.TitleLarge</item>
+        <item name="android:minHeight">@dimen/sc02_survival_button_min_height</item>
+        <item name="android:paddingTop">@dimen/element_margin_medium</item>
+        <item name="android:paddingBottom">@dimen/element_margin_medium</item>
+        <item name="iconSize">40dp</item>
+        <item name="iconGravity">textStart</item>
+        <item name="iconPadding">@dimen/element_margin_medium</item>
+        <item name="shapeAppearance">@style/ShapeAppearance.Crosspath.Card</item>
+    </style>
+
+    <!-- 一覧の〇／ーバッジ 仕様 §11.8（色は ViewHolder でテーマ属性から設定する） -->
+    <style name="Widget.Crosspath.StatusBadge" parent="">
+        <item name="android:background">@drawable/bg_status_badge</item>
+        <item name="android:layout_width">@dimen/status_badge_size</item>
+        <item name="android:layout_height">@dimen/status_badge_size</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textAlignment">center</item>
+        <item name="android:includeFontPadding">false</item>
+        <item name="android:textAppearance">@style/TextAppearance.Material3.LabelLarge</item>
+    </style>
+</resources>

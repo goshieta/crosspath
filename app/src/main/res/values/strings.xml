@@ -1,3 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">crosspath</string>
+    <!-- 共通 -->
+    <string name="label_my_id">あなたの個人ID</string>
+    <string name="action_copy">コピー</string>
+    <string name="action_share">共有</string>
+    <string name="action_home">ホーム</string>
+    <string name="action_register">登録する</string>
+    <string name="action_confirm">確定</string>
+    <string name="action_delete">削除</string>
+    <string name="action_watch_target">通知対象者</string>
+    <string name="action_notification_history">通知画面</string>
+    <string name="state_no_session">現在の通信期間なし</string>
+    <string name="action_register_watch_target">登録</string>
+    <string name="hint_name">名前</string>
+    <!-- SC01 -->
+    <string name="sc01_title">初回登録</string>
+    <string name="sc01_hint_name">自分の名前を入力</string>
+    <string name="sc01_error_blank_name">空白のみの名前は登録できません</string>
+    <string name="sc01_id_card_title">あなたの個人ID</string>
+    <string name="sc01_toast_copied">個人IDをコピーしました</string>
+    <string name="sc01_result_success">登録できました</string>
+    <!-- SC02 -->
+    <string name="sc02_title">ホーム</string>
+    <string name="sc02_button_survival">生存登録</string>
+    <string name="sc02_survival_hint">タップして現在地を登録します。通信は市町村の確定後に始まります</string>
+    <!-- SC03 -->
+    <string name="sc03_title">市町村選択</string>
+    <string name="sc03_label_location">現在地</string>
+    <string name="sc03_hint_prefecture">県を選択</string>
+    <string name="sc03_hint_municipality">市町村を選択</string>
+    <string name="sc03_error_start_failed">通信期間を開始できませんでした</string>
+    <!-- SC04 -->
+    <string name="sc04_title">緊急時画面</string>
+    <string name="sc04_comm_active">通信期間中</string>
+    <string name="sc04_comm_inactive">未開始</string>
+    <string name="sc04_no_watch_targets">通知対象者が登録されていません</string>
+    <string name="sc04_block_clock_uncertain">端末の時刻を確認できないため通信を停止しました</string>
+    <string name="sc04_comm_blocked">通信できません</string>
+    <string name="sc04_block_comm">通信機能が使えないため、生存情報を送受信できません（72時間は進みます）</string>
+    <!-- SC05 -->
+    <string name="sc05_title">通知対象者管理</string>
+    <string name="sc05_hint_target_id">対象者の個人ID</string>
+    <string name="sc05_hint_target_name">対象者の表示名</string>
+    <string name="sc05_error_duplicate_id">同じIDがすでに登録されています</string>
+    <string name="sc05_error_invalid_id">IDの形式が正しくありません</string>
+    <string name="sc05_error_name_required">名前は必須です</string>
+    <string name="sc05_register_success">登録しました</string>
+    <string name="sc05_error_register_failed">登録に失敗しました</string>
+    <string name="sc05_error_delete_failed">削除に失敗しました</string>
+    <!-- SC06 -->
+    <string name="sc06_title">通知履歴</string>
+    <string name="sc04_countdown_default">72時間00分00秒</string>
+    <!-- %1$s は残り時間文字列 -->
+    <string name="sc04_countdown_label">通信終了まで %1$s</string>
+    <!-- %1$s は通信状態文字列 -->
+    <string name="sc04_comm_status">通信状態: %1$s</string>
+    <!-- 〇／ー -->
+    <string name="status_received">〇</string>
+    <string name="status_not_received">ー</string>
+    <string name="status_received_desc">今回の期間で受信済み</string>
+    <!-- %1$s は対象者名、%2$s は受信状態の説明 -->
+    <string name="item_safety_row_desc">%1$s、%2$s</string>
+    <string name="status_not_received_desc">今回の期間では未受信</string>
+    <string name="notification_delivery_counts">今回の通知：発行済み %1$d・待機 %2$d・権限不足 %3$d</string>
 </resources>
