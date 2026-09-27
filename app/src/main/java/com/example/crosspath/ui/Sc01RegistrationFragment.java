@@ -148,8 +148,12 @@ public class Sc01RegistrationFragment extends Fragment {
      * 入力した名前はそのまま残し、ボタンを再有効化して再試行を促す（自動再登録はしない）。
      */
     private void showError(Throwable error) {
+        // CompletionException などで包まれているので、最初に見つかる RegistrationException を使う。
+        // 原因を根まで辿ると RegistrationException の cause（IOException 等）になり、分類が失われる。
         Throwable cause = error;
-        while (cause.getCause() != null) cause = cause.getCause();
+        while (cause != null && !(cause instanceof RegistrationException) && cause.getCause() != null) {
+            cause = cause.getCause();
+        }
 
         int messageResId = cause instanceof RegistrationException
                 ? getErrorMessageResId((RegistrationException) cause)
