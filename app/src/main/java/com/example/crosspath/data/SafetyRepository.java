@@ -129,9 +129,16 @@ public final class SafetyRepository {
 
     /** Atomically start a local period and save self; refuses changes during an active period. */
     public CompletableFuture<String> startSession(int userId, int municipalityCode) {
+        return startSessionAtConfirmation(userId, municipalityCode, new ConfirmationClock.Token(clock.read()));
+    }
+
+    /** UI captures the operation time before waiting for initialization/queueing. */
+    public CompletableFuture<String> startSessionAtConfirmation(int userId, int municipalityCode,
+            ConfirmationClock.Token confirmation) {
+        SessionClock.Reading confirmed = Objects.requireNonNull(confirmation).reading;
         WireRecord self = new WireRecord(userId, municipalityCode);
         self.requireMunicipalityName(municipalities);
-        SessionClock.Reading confirmed = clock.read();
+        Objects.requireNonNull(confirmed);
         long confirmedAt = confirmed.wall;
         return checkAndEndExpiredSession().thenCompose(ignored ->
                 CompletableFuture.supplyAsync(() -> db.runInTransaction(() -> {
@@ -603,5 +610,47 @@ public final class SafetyRepository {
             throw new IllegalStateException("Inactive, stale or expired local session");
         }
         return session;
+    }
+
+    /**
+     * Serializes the final gate, OS post and delivery update with session replacement.
+     * OS + SQLite are not atomic: a crash retries the same stable OS notification key.
+     * A failure leaves PENDING. Old public queue APIs remain compatible, but dispatchers
+     * must use this operation rather than posting a previously fetched queue themselves.
+     */
+    public CompletableFuture<Integer> dispatchCurrentNotifications(NotificationSink sink) {
+        Objects.requireNonNull(sink);
+        return maintained(status -> {
+            if (status.state != SessionStatus.State.ACTIVE) return 0;
+            int count = 0;
+            for (NotificationHistory history : db.safetyDao().deliveryPage(status.sessionId,
+                    db.safetyDao().clockAnchor().wall)) {
+                ClockAnchor.Observation now = observeTime();
+                SessionStatus gate = SessionStatus.evaluate(db.safetyDao().session(), now.anchor.wall, now.trusted);
+                if (gate.state != SessionStatus.State.ACTIVE || !Objects.equals(gate.sessionId, history.localSessionId)) break;
+                NotificationSink.Delivery delivery = sink.post(new NotificationRequest(history.notificationId, history));
+                if (delivery == null) throw new IllegalStateException("Missing delivery outcome");
+                db.safetyDao().finishNotification(history.notificationId, delivery.name(), now.anchor.wall);
+                count++;
+            }
+            return count;
+        });
+    }
+
+    /** Explicit user retry after permission/settings change; never revives old periods. */
+    public CompletableFuture<Integer> retryBlockedNotifications() {
+        return maintained(status -> status.state != SessionStatus.State.ACTIVE ? 0
+                : db.safetyDao().retryBlocked(status.sessionId, db.safetyDao().clockAnchor().wall));
+    }
+
+    /** OS reconciliation/tap lookup uses the same retained clock, even after DB deletion. */
+    public CompletableFuture<Boolean> isHistoryValid(long id) {
+        return maintained(status -> db.safetyDao().hasValidHistory(id, db.safetyDao().clockAnchor().wall) != 0);
+    }
+
+    public CompletableFuture<NotificationDeliveryStatus> notificationDeliveryStatus() {
+        return maintained(status -> status.state != SessionStatus.State.ACTIVE
+                ? new NotificationDeliveryStatus(0, 0, 0)
+                : db.safetyDao().deliveryStatus(status.sessionId, db.safetyDao().clockAnchor().wall));
     }
 }

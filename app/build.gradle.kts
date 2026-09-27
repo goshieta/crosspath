@@ -4,14 +4,19 @@ plugins {
 
 android {
     namespace = "com.example.crosspath"
-    compileSdk = 36
-    buildToolsVersion = "36.1.0"
-    buildFeatures { buildConfig = true }
+    compileSdk {
+        version = release(37)
+    }
+
+    // BuildConfig.DEBUG を BLE 検証画面と中継サービスのログ制御で使用する。
+    buildFeatures {
+        buildConfig = true
+    }
 
     defaultConfig {
         applicationId = "com.example.crosspath"
         minSdk = 31
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
 
@@ -24,8 +29,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".debug"
+        }
         release {
-            isMinifyEnabled = false
+            optimization {
+                enable = false
+            }
         }
     }
     compileOptions {

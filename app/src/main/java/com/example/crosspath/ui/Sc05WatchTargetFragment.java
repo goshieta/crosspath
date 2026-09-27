@@ -89,8 +89,9 @@ public class Sc05WatchTargetFragment extends Fragment {
      * Room から通知対象一覧を読み込み、リストを更新する。
      */
     private void loadWatchTargets() {
-        UiData.whenReady(repo -> UiData.onResult(repo.watchTargets(), targets -> {
-            if (!isAdded() || getView() == null) return;
+        final View owner = getView();
+        UiData.onResult(UiData.execute(repo -> repo.watchTargets()), targets -> {
+            if (!isAdded() || getView() != owner) return;
             registeredList.clear();
             registeredIds.clear();
             for (WatchTarget target : targets) {
@@ -99,12 +100,13 @@ public class Sc05WatchTargetFragment extends Fragment {
             }
             adapter.notifyDataSetChanged();
         }, error -> {
-            if (!isAdded() || getView() == null) return;
-            // 読み込み失敗時は空リストのまま
-        }));
+            if (!isAdded() || getView() != owner) return;
+            Snackbar.make(requireView(), "一覧を読み込めません。画面を開き直して再試行してください", Snackbar.LENGTH_LONG).show();
+        });
     }
 
     private void onRegisterClicked() {
+        if (!registerButton.isEnabled()) return;
         String idStr = idEditText.getText() != null ? idEditText.getText().toString().trim() : "";
         String name = nameEditText.getText() != null ? nameEditText.getText().toString().trim() : "";
 
@@ -135,7 +137,7 @@ public class Sc05WatchTargetFragment extends Fragment {
         }
 
         // 名前の空チェック
-        if (name.isEmpty()) {
+        if (name.codePoints().allMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c))) {
             nameInputLayout.setError(getString(R.string.sc05_error_name_required));
             hasError = true;
         } else {
@@ -154,9 +156,10 @@ public class Sc05WatchTargetFragment extends Fragment {
      * 検証済みの ID・名前で DB 登録を実行する。
      */
     private void performRegistration(int idValue, String name) {
+        final View owner = getView();
         registerButton.setEnabled(false);
-        UiData.whenReady(repo -> UiData.onResult(repo.addWatchTarget(idValue, name), added -> {
-            if (!isAdded() || getView() == null) return;
+        UiData.onResult(UiData.execute(repo -> repo.addWatchTarget(idValue, name)), added -> {
+            if (!isAdded() || getView() != owner) return;
             registerButton.setEnabled(true);
             if (added) {
                 // 入力欄クリア
@@ -172,10 +175,10 @@ public class Sc05WatchTargetFragment extends Fragment {
                 idInputLayout.setError(getString(R.string.sc05_error_duplicate_id));
             }
         }, error -> {
-            if (!isAdded() || getView() == null) return;
+            if (!isAdded() || getView() != owner) return;
             registerButton.setEnabled(true);
             Snackbar.make(requireView(), R.string.sc05_error_register_failed, Snackbar.LENGTH_SHORT).show();
-        }));
+        });
     }
 
     /**
@@ -183,16 +186,17 @@ public class Sc05WatchTargetFragment extends Fragment {
      */
     private void onDeleteClicked(WatchTarget target, MaterialButton deleteButton) {
         if (!isAdded() || getView() == null) return;
+        final View owner = getView();
         deleteButton.setEnabled(false);
-        UiData.whenReady(repo -> UiData.onResult(repo.deleteWatchTarget(target.targetUserId), deleted -> {
-            if (!isAdded() || getView() == null) return;
+        UiData.onResult(UiData.execute(repo -> repo.deleteWatchTarget(target.targetUserId)), deleted -> {
+            if (!isAdded() || getView() != owner) return;
             deleteButton.setEnabled(true);
             loadWatchTargets();
         }, error -> {
-            if (!isAdded() || getView() == null) return;
+            if (!isAdded() || getView() != owner) return;
             deleteButton.setEnabled(true);
             Snackbar.make(requireView(), R.string.sc05_error_delete_failed, Snackbar.LENGTH_SHORT).show();
-        }));
+        });
     }
 
     /**
@@ -219,6 +223,7 @@ public class Sc05WatchTargetFragment extends Fragment {
             WatchTarget item = items.get(position);
             holder.idText.setText(String.valueOf(item.targetUserId));
             holder.nameText.setText(item.displayName);
+            holder.deleteButton.setEnabled(true);
             holder.deleteButton.setOnClickListener(v ->
                     onDeleteClicked(item, holder.deleteButton));
         }

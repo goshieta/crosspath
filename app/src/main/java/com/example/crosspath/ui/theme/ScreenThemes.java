@@ -13,8 +13,7 @@ import com.example.crosspath.ui.Screen;
 /**
  * 画面別テーマ適用ヘルパ。仕様: 詳細設計書 v0.8 §11.13
  *
- * SC04 は常に Theme.Survival.EmergencyDark。SC05/SC06 は緊急時モード（emergency=true）
- * の場合のみ EmergencyDark、それ以外は Theme.Survival.Light を返す。
+ * 72時間タイマー作動中は全画面をダーク表示する。SC04 は常にダーク。
  * ContextThemeWrapper でラップした LayoutInflater を Fragment に提供する。
  */
 public class ScreenThemes {
@@ -44,11 +43,10 @@ public class ScreenThemes {
 
     /**
      * その画面が緊急時ダークで表示されるか。
-     * SC04 は常に true。emergency が true かつ SC05/SC06 の場合も true。
+     * タイマー作動中は全画面で true。非作動時も SC04 は専用ダーク表示。
      */
     public static boolean isEmergencyVariant(@NonNull Screen screen, boolean emergency) {
-        if (screen == Screen.SC04) return true;
-        return emergency && (screen == Screen.SC05 || screen == Screen.SC06);
+        return emergency || screen == Screen.SC04;
     }
 
     /**

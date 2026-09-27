@@ -44,6 +44,11 @@ public class Sc04EmergencyFragment extends Fragment {
     private View retryRelay;
     private com.example.crosspath.service.RelayStatus relayStatus;
     private RecyclerView safetyList;
+    private final java.util.function.Consumer<com.example.crosspath.data.SessionStatus> periodListener = status -> {
+        if (getView() == null || !isResumed()) return;
+        sessionStatus = status; remainingForDisplay = status.remainingMillis; loadWatchStatuses(); applyViewState();
+    };
+
 
     private final Handler countdownHandler = new Handler(Looper.getMainLooper());
     private SessionStatus sessionStatus;
@@ -78,7 +83,8 @@ public class Sc04EmergencyFragment extends Fragment {
                     }
                 }, error -> {
                     if (!isAdded() || getView() == null) return;
-                    ((NavHost) requireActivity()).navigatePush(Screen.SC02);
+                    blockReasonText.setText("期限を確認できません。アプリを開き直して再試行してください");
+                    blockReasonText.setVisibility(View.VISIBLE);
                 });
                 return;
             }
@@ -142,12 +148,14 @@ public class Sc04EmergencyFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        UiData.addListener(periodListener);
         // 復帰時にも最新データを取り直す
         loadData();
     }
 
     @Override
     public void onPause() {
+        UiData.removeListener(periodListener);
         super.onPause();
         stopCountdown();
     }
@@ -200,7 +208,7 @@ public class Sc04EmergencyFragment extends Fragment {
         SessionStatus.State state = status == null ? null : status.state;
         // SessionStatus は relayEnabled を公開しないが、ACTIVE のとき canCommunicate == relayEnabled。
         // CLOCK_UNCERTAIN では relayEnabled は判定に使われない（Sc04ViewState の規則）。
-        boolean relayEnabled = status != null && status.canCommunicate;
+        boolean relayEnabled = UiData.communicationRunning(status);
         Sc04ViewState vs = Sc04ViewState.of(state, relayEnabled, hasTargets);
 
         // カウントダウン（§11.10: 秒単位の更新は SC04 表示中のみ。期限判定はデータ層の責務）
@@ -222,7 +230,7 @@ public class Sc04EmergencyFragment extends Fragment {
 
         // 通信不能理由（Bluetooth無効・権限不足・時計不確実など）
         if (vs.blockReasonRes != 0) {
-            blockReasonText.setText(getString(vs.blockReasonRes));
+            blockReasonText.setText(state == SessionStatus.State.ACTIVE ? UiData.communicationReason(status) : getString(vs.blockReasonRes));
             blockReasonText.setVisibility(View.VISIBLE);
         } else {
             blockReasonText.setVisibility(View.GONE);
@@ -260,8 +268,7 @@ public class Sc04EmergencyFragment extends Fragment {
     /** 受信状態一覧を UiData 経由で読み込む。表示可否は Sc04ViewState が決める。 */
     private void loadWatchStatuses() {
         if (!isAdded()) return;
-        UiData.whenReady(repo ->
-            UiData.onResult(repo.currentWatchStatuses(), statuses -> {
+        UiData.onResult(UiData.execute(repo -> repo.currentWatchStatuses()), statuses -> {
                 if (!isAdded() || getView() == null) return;
                 watchStatuses = statuses == null ? null : new ArrayList<>(statuses);
                 hasTargets = watchStatuses != null && !watchStatuses.isEmpty();
@@ -271,8 +278,7 @@ public class Sc04EmergencyFragment extends Fragment {
                 watchStatuses = null;
                 hasTargets = false;
                 applyViewState();
-            })
-        );
+            });
     }
 
     /** カウントダウンを開始する（既に動いていれば二重起動しない）。 */

@@ -18,9 +18,6 @@ import androidx.fragment.app.Fragment;
 import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
 import com.example.crosspath.ui.data.UserProfile;
-import com.example.crosspath.ui.data.UiData;
-import com.example.crosspath.data.SessionStatus;
-import java.util.concurrent.CompletableFuture;
 import com.example.crosspath.ui.theme.ScreenThemes;
 import com.example.crosspath.ui.theme.ViewAnims;
 import com.google.android.material.button.MaterialButton;
@@ -46,13 +43,16 @@ public class Sc01RegistrationFragment extends Fragment {
     private TextView resultText;
     private MaterialButton copyButton;
     private MaterialButton homeButton;
+    private android.widget.EditText debugId;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        LayoutInflater themedInflater = ScreenThemes.themedLayoutInflater(inflater, Screen.SC01);
+        boolean emergency = getActivity() instanceof MainActivity
+                && ((MainActivity) getActivity()).isEmergencyMode();
+        LayoutInflater themedInflater = ScreenThemes.themedLayoutInflater(inflater, Screen.SC01, emergency);
         return themedInflater.inflate(R.layout.fragment_sc01_registration, container, false);
     }
 
@@ -78,52 +78,52 @@ public class Sc01RegistrationFragment extends Fragment {
             ((MainActivity) getActivity()).applyScreenTheme(Screen.SC01);
         }
 
+        if (com.example.crosspath.registration.RegistrationProvider.HAS_DEBUG_INPUT) {
+            debugId = new android.widget.EditText(requireContext());
+            debugId.setId(R.id.debug_registration_id);
+            debugId.setHint("デモ専用ID（端末間で重複しない1〜16777215）");
+            debugId.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            ViewGroup parent = (ViewGroup) registerButton.getParent();
+            parent.addView(debugId, parent.indexOfChild(registerButton));
+        }
+        if (UserProfile.isRegistered(requireContext())) showRegistered();
         registerButton.setOnClickListener(v -> onRegisterClicked());
         copyButton.setOnClickListener(v -> onCopyClicked());
         homeButton.setOnClickListener(v -> onHomeClicked());
     }
 
     private void onRegisterClicked() {
+        if (!registerButton.isEnabled()) return;
         String name = nameEditText.getText() != null ? nameEditText.getText().toString().trim() : "";
 
         // 空白のみの名前は登録不可（仕様 §11.2）— TextInputLayout#setError で表示
-        if (name.isEmpty()) {
+        if (name.codePoints().allMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c))) {
             nameInputLayout.setError(getString(R.string.sc01_error_blank_name));
             return;
         }
         nameInputLayout.setError(null);
 
         registerButton.setEnabled(false);
-        UiData.whenReady(repo -> UiData.onResult(repo.checkAndEndExpiredSession().thenCompose(status -> {
-            if (status.state == SessionStatus.State.CLOCK_UNCERTAIN) {
-                throw new IllegalStateException("Clock must be checked before registration");
-            }
-            if (status.state == SessionStatus.State.ACTIVE) {
-                return repo.self(status.sessionId).thenApply(self -> {
-                    if (self == null) throw new IllegalStateException("Missing self record");
-                    return self.userId;
-                });
-            }
-            return CompletableFuture.completedFuture(0);
-        }), sessionId -> {
-            if (!isAdded() || getView() == null) return;
-            registerButton.setEnabled(true);
-            try {
-                UserProfile.register(requireContext(), name, sessionId);
-                showRegistrationResult();
-            } catch (IllegalStateException error) {
-                nameInputLayout.setError(getString(R.string.sc01_error_session_registration));
-            }
+        final View owner = requireView();
+        com.example.crosspath.ui.data.UiData.onResult(UserProfile.register(requireContext(), name,
+                debugId == null ? "" : debugId.getText().toString().trim()), assigned -> {
+            if (!isAdded() || getView() != owner) return;
+            showRegistered();
         }, error -> {
-            if (!isAdded() || getView() == null) return;
+            if (!isAdded() || getView() != owner) return;
             registerButton.setEnabled(true);
-            nameInputLayout.setError(getString(R.string.sc01_error_session_registration));
-        }));
+            Throwable cause = error;
+            while (cause.getCause() != null) cause = cause.getCause();
+            resultText.setText(cause.getMessage());
+            resultText.setVisibility(View.VISIBLE);
+        });
     }
 
-    private void showRegistrationResult() {
+    private void showRegistered() {
+        registerButton.setEnabled(false);
+        nameEditText.setEnabled(false);
+        if (debugId != null) debugId.setEnabled(false);
         idValueText.setText(String.valueOf(UserProfile.personalId(requireContext())));
-
         // 登録結果表示 仕様 §11.2(4)（成功アイコン付き）
         resultText.setText(R.string.sc01_result_success);
         TextViewCompat.setCompoundDrawableTintList(resultText, ColorStateList.valueOf(
