@@ -1,0 +1,18 @@
+<resources>
+    <string name="ble_title">crosspath BLE検証</string>
+    <string name="ble_sync_mode">同期方式（両端末で選択）</string>
+    <string name="ble_byte_budget">差分・階層同期の共有ATT換算予算（B）</string>
+    <string name="ble_contact_seconds">差分・階層同期の接触時間（秒）</string>
+    <string name="ble_notice">FULL同期の検証画面です。通常画面と登録・受信データ・72時間期限を共有します。期間中の再登録はできません。画面を離れると通信を停止します。期限判定時に通信データを削除します。常駐通信は未実装です。</string>
+    <string name="ble_open_debug">BLE検証画面を開く（debug）</string>
+    <string name="sc01_error_session_registration">現在の登録情報を確認できません。端末の時計と通信期間の登録状態を確認してください。</string>
+    <string name="ble_confirm">ID・市町村を確定して保存</string>
+    <string name="ble_role">端末の役割</string>
+    <string name="ble_test_id">テストID（端末Aは1、端末Bは2）</string>
+    <string name="ble_location">テスト送信する市町村</string>
+    <string name="ble_mtu23">MTU 23で検証（Client側で選択）</string>
+    <string name="ble_start">検証開始</string>
+    <string name="ble_pause_ack">保存後ACKを一時停止（切断試験用・開始前に選択）</string>
+    <string name="ble_stop">停止</string>
+    <string name="ble_idle">端末BでServerを開始してから、端末AでClientを開始してください。</string>
+</resources>

@@ -264,4 +264,30 @@ public class MonotonicExpiryTest {
         assertTrue(second.elapsed >= first.elapsed);
         assertTrue(first.wall > 0);
     }
+
+    @Test public void bleSnapshotAndPagesRejectRollbackAndStopMatchingSession() throws Exception {
+        com.example.crosspath.sync.SyncStore.Snapshot snapshot = await(repository.snapshot(session));
+        clock.wall -= 2_000;
+        assertThrows(ExecutionException.class, () -> await(repository.snapshot(session)));
+        assertThrows(ExecutionException.class, () -> await(repository.snapshotPage(snapshot, 0, 0xFFFFFF, 256)));
+        assertEquals(java.util.Arrays.asList(session, session), stops);
+        assertEquals(1, db.safetyDao().count());
+    }
+
+    @Test public void roomSyncReceiptFeedsUiStatusAndHistoryWithoutDuplicateInsertion() throws Exception {
+        await(repository.addWatchTarget(2, "Target"));
+        com.example.crosspath.sync.RoomSyncStore store = new com.example.crosspath.sync.RoomSyncStore(repository, session);
+        List<WireRecord> records = Collections.singletonList(new WireRecord(2, 1));
+        assertArrayEquals(new int[]{0}, await(store.commit(master.version, records, () -> true)));
+        assertEquals(WatchStatus.State.RECEIVED, await(repository.currentWatchStatuses()).get(0).state);
+        assertEquals(1, await(repository.validHistories()).size());
+        assertArrayEquals(new int[]{1}, await(store.commit(master.version, records, () -> true)));
+        assertEquals(1, await(repository.validHistories()).size());
+        clock.advance(72 * HOUR);
+        assertThrows(ExecutionException.class, () -> await(store.commit(master.version, records, () -> true)));
+        assertTrue(stops.contains(session));
+        assertFalse(await(repository.checkAndEndExpiredSession()).canCommunicate);
+        assertEquals(0, db.safetyDao().count());
+        assertEquals(1, await(repository.validHistories()).size());
+    }
 }

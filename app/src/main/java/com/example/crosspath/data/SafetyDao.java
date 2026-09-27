@@ -9,11 +9,24 @@ import java.util.List;
 /** Internal persistence access; callers use SafetyRepository to preserve transaction invariants. */
 @Dao
 abstract class SafetyDao {
+    static class BlockCount { public int blockId; public int count; }
+    @Query("SELECT (userId >> 10) AS blockId, COUNT(*) AS count FROM SafetyRecord WHERE localSessionId = :sessionId GROUP BY (userId >> 10)")
+    abstract List<BlockCount> blockCounts(String sessionId);
+    @Query("SELECT userId FROM SafetyRecord WHERE localSessionId = :sessionId AND insertRevision <= :revision AND userId >= :first AND userId <= :last ORDER BY userId")
+    abstract List<Integer> blockIds(String sessionId, long revision, int first, int last);
+    @Query("SELECT userId, municipalityCode FROM SafetyRecord WHERE localSessionId = :sessionId AND insertRevision <= :revision AND userId IN (:ids) ORDER BY userId")
+    abstract List<WireRecord> requestedRecords(String sessionId, long revision, int[] ids);
     @Query("SELECT * FROM SafetyRecord WHERE userId = :id")
     abstract SafetyRecord find(int id);
 
     @Query("SELECT userId, municipalityCode FROM SafetyRecord WHERE localSessionId = :sessionId AND userId > :after ORDER BY userId LIMIT :limit")
     abstract List<WireRecord> page(String sessionId, int after, int limit);
+
+    @Query("SELECT userId, municipalityCode FROM SafetyRecord WHERE localSessionId = :sessionId AND insertRevision <= :revision AND userId > :after AND userId <= :through ORDER BY userId LIMIT :limit")
+    abstract List<WireRecord> snapshotPage(String sessionId, long revision, int after, int through, int limit);
+
+    @Query("SELECT userId, municipalityCode FROM SafetyRecord WHERE localSessionId = :sessionId AND sourceKind = 'SELF' LIMIT 1")
+    abstract WireRecord self(String sessionId);
 
     @Query("SELECT COUNT(*) FROM SafetyRecord")
     abstract long count();

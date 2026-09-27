@@ -8,6 +8,11 @@ android {
         version = release(37)
     }
 
+    // BuildConfig.DEBUG を BLE 検証画面と中継サービスのログ制御で使用する。
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "com.example.crosspath"
         minSdk = 31
