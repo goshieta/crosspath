@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace = "com.example.crosspath"
-    compileSdk {
-        version = release(37)
-    }
+    compileSdk = 36
+    buildToolsVersion = "36.1.0"
+    buildFeatures { buildConfig = true }
 
     defaultConfig {
         applicationId = "com.example.crosspath"
         minSdk = 31
-        targetSdk = 37
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
@@ -25,9 +25,7 @@ android {
 
     buildTypes {
         release {
-            optimization {
-                enable = false
-            }
+            isMinifyEnabled = false
         }
     }
     compileOptions {

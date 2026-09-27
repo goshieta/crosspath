@@ -9,6 +9,8 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.LongSupplier;
+import java.util.function.BooleanSupplier;
+import com.example.crosspath.sync.SyncStore;
 
 /**
  * UI/BLE-independent async storage API. Supply a background Executor (preferably single-threaded).
@@ -97,6 +99,12 @@ public final class SafetyRepository {
 
     public CompletableFuture<BatchResult> applyReceivedBatch(String localSessionId,
             String peerMasterVersion, List<WireRecord> batch) {
+        return applyReceivedBatch(localSessionId, peerMasterVersion, batch, () -> true);
+    }
+
+    /** Rechecks the connection gate in the DB transaction, not just at enqueue time. */
+    public CompletableFuture<BatchResult> applyReceivedBatch(String localSessionId,
+            String peerMasterVersion, List<WireRecord> batch, BooleanSupplier connectionActive) {
         municipalities.requireVersion(peerMasterVersion);
         Objects.requireNonNull(localSessionId);
         Objects.requireNonNull(batch);
@@ -106,6 +114,7 @@ public final class SafetyRepository {
             Objects.requireNonNull(record).requireMunicipalityName(municipalities);
         }
         return CompletableFuture.supplyAsync(() -> db.runInTransaction(() -> {
+            if (!connectionActive.getAsBoolean()) throw new IllegalStateException("Stale connection");
             SafetyDao dao = db.safetyDao();
             ActiveSession session = requireSession(localSessionId);
             long now = clock.getAsLong();
@@ -144,6 +153,7 @@ public final class SafetyRepository {
                 }
             }
             requireSession(localSessionId);
+            if (!connectionActive.getAsBoolean()) throw new IllegalStateException("Stale connection");
             if (inserted > 0) {
                 session.dataRevision = revision;
                 session.lastObservedWall = Math.max(session.lastObservedWall, now);
@@ -168,6 +178,32 @@ public final class SafetyRepository {
         return CompletableFuture.supplyAsync(() -> db.safetyDao().session(), executor);
     }
 
+    public CompletableFuture<SyncStore.Snapshot> snapshot(String sessionId) {
+        return CompletableFuture.supplyAsync(() -> db.runInTransaction(() -> {
+            ActiveSession s = requireSession(sessionId);
+            return new SyncStore.Snapshot(s.sessionId, s.dataRevision, db.safetyDao().count(), s.endsAtWall);
+        }), executor);
+    }
+
+    public CompletableFuture<List<WireRecord>> snapshotPage(SyncStore.Snapshot snapshot,
+            int after, int through, int limit) {
+        if (after < 0 || through > 0xFFFFFF || through < after || limit < 1 || limit > 256) {
+            throw new IllegalArgumentException("Snapshot page bounds");
+        }
+        return CompletableFuture.supplyAsync(() -> db.runInTransaction(() -> {
+            ActiveSession s = requireSession(snapshot.sessionId);
+            if (snapshot.revision > s.dataRevision) throw new IllegalStateException("Invalid revision");
+            return db.safetyDao().snapshotPage(snapshot.sessionId, snapshot.revision, after, through, limit);
+        }), executor);
+    }
+
+    public CompletableFuture<WireRecord> self(String sessionId) {
+        return CompletableFuture.supplyAsync(() -> db.runInTransaction(() -> {
+            requireSession(sessionId);
+            return db.safetyDao().self(sessionId);
+        }), executor);
+    }
+
     public CompletableFuture<Boolean> addWatchTarget(WatchTarget target) {
         Objects.requireNonNull(target);
         return CompletableFuture.supplyAsync(
@@ -188,7 +224,7 @@ public final class SafetyRepository {
     private ActiveSession requireSession(String expectedId) {
         ActiveSession session = db.safetyDao().session();
         if (session == null || !session.sessionId.equals(expectedId)
-                || !"ACTIVE".equals(session.state) || clock.getAsLong() >= session.endsAtWall) {
+                || !"ACTIVE".equals(session.state) || !session.relayEnabled || clock.getAsLong() >= session.endsAtWall) {
             throw new IllegalStateException("Inactive, stale or expired local session");
         }
         return session;

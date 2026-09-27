@@ -15,6 +15,12 @@ abstract class SafetyDao {
     @Query("SELECT userId, municipalityCode FROM SafetyRecord WHERE localSessionId = :sessionId AND userId > :after ORDER BY userId LIMIT :limit")
     abstract List<WireRecord> page(String sessionId, int after, int limit);
 
+    @Query("SELECT userId, municipalityCode FROM SafetyRecord WHERE localSessionId = :sessionId AND insertRevision <= :revision AND userId > :after AND userId <= :through ORDER BY userId LIMIT :limit")
+    abstract List<WireRecord> snapshotPage(String sessionId, long revision, int after, int through, int limit);
+
+    @Query("SELECT userId, municipalityCode FROM SafetyRecord WHERE localSessionId = :sessionId AND sourceKind = 'SELF' LIMIT 1")
+    abstract WireRecord self(String sessionId);
+
     @Query("SELECT COUNT(*) FROM SafetyRecord")
     abstract long count();
 

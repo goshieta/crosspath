@@ -218,4 +218,45 @@ public class SafetyRepositoryTest {
         assertEquals(1, remaining.size());
         assertEquals(next, remaining.get(0).localSessionId);
     }
+
+    @Test public void snapshotPagesFreezeRevisionAndHonorRange() throws Exception {
+        await(repository.receive(session, master.version, 1024, 20));
+        com.example.crosspath.sync.SyncStore.Snapshot snapshot = await(repository.snapshot(session));
+        await(repository.receive(session, master.version, 2, 20));
+        assertEquals(2, snapshot.count);
+        List<WireRecord> frozen = await(repository.snapshotPage(snapshot, 0, 0xFFFFFF, 256));
+        assertEquals(2, frozen.size());
+        assertEquals(1024, frozen.get(1).userId);
+        assertEquals(1, await(repository.snapshotPage(snapshot, 0, 1023, 256)).size());
+        assertEquals(3, await(repository.pageAfter(session, 0, 256)).size());
+    }
+
+    @Test public void cancelledConnectionCannotCommitQueuedBatch() throws Exception {
+        java.util.concurrent.atomic.AtomicBoolean active = new java.util.concurrent.atomic.AtomicBoolean(false);
+        try {
+            await(repository.applyReceivedBatch(session, master.version,
+                    Arrays.asList(new WireRecord(2, 20)), active::get));
+            fail("Cancelled connection");
+        } catch (java.util.concurrent.ExecutionException expected) { }
+        assertEquals(1, db.safetyDao().count());
+    }
+
+    @Test public void staleSnapshotCannotReadNewSession() throws Exception {
+        com.example.crosspath.sync.SyncStore.Snapshot snapshot = await(repository.snapshot(session));
+        now.set(db.safetyDao().session().endsAtWall);
+        await(repository.startSession(3, 30));
+        try { await(repository.snapshotPage(snapshot, 0, 0xFFFFFF, 256)); fail("stale snapshot"); }
+        catch (java.util.concurrent.ExecutionException expected) { }
+    }
+
+    @Test public void disconnectDuringTransactionRollsBackRowsAndRevision() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger checks = new java.util.concurrent.atomic.AtomicInteger();
+        try {
+            await(repository.applyReceivedBatch(session, master.version, Arrays.asList(new WireRecord(2, 20)),
+                    () -> checks.incrementAndGet() == 1));
+            fail("must roll back when connection becomes stale");
+        } catch (java.util.concurrent.ExecutionException expected) { }
+        assertEquals(1, db.safetyDao().count());
+        assertEquals(1, db.safetyDao().session().dataRevision);
+    }
 }
