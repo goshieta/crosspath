@@ -1,261 +1,199 @@
-# crosspath — 災害時すれ違い通信
+# CrossPath
 
-災害時に携帯電話網が利用できない環境で、Bluetooth によるすれ違い通信を利用して
-自身の生存情報を発信し、気にかかる人の安否情報を受信する Android アプリ。
+**通信インフラが途絶した災害時に、人から人へバケツリレーで生存情報を届ける Android アプリ**
 
-## ビルド手順
+大規模災害でモバイル回線が止まっても、人はまだ動いています。CrossPath は Bluetooth Low Energy による**端末同士のすれ違い通信**だけで生存情報を運び、基地局にもインターネットにも頼らずに「誰かが確かに生きている」という情報を、より多くの人へ届けることを目指すプロジェクトです。
 
-### 前提条件
+> ⚠️ 本リポジトリはハッカソン向けの試作開発中です。本書の内容は詳細設計書（草案 v0.8）に基づく設計方針であり、実装は段階的に進行中です。本人性の検証や暗号署名は現時点では未対応です。
 
-- AGP 9.4.1 / Gradle 9.6.0 に対応する Android Studio
-- Android SDK 37 (compileSdk), minSdk 31
-- Gradle実行用JDK（検証環境はJDK 25）。Javaソース互換性は11。
+---
 
-### コマンドラインビルド
+## 目次
 
-```bash
-# 環境変数 JAVA_HOME と ANDROID_HOME を設定
-export JAVA_HOME="$HOME/.local/opt/android-studio/jbr"
-export ANDROID_HOME="$HOME/Android/Sdk"
+- [CrossPath とは](#crosspath-とは)
+- [解決したい課題](#解決したい課題)
+- [主な特徴](#主な特徴)
+- [動作イメージ](#動作イメージ)
+- [アーキテクチャ](#アーキテクチャ)
+- [データ設計のこだわり](#データ設計のこだわり)
+- [技術スタック](#技術スタック)
+- [画面構成](#画面構成)
+- [実装ロードマップ](#実装ロードマップ)
+- [開発体制](#開発体制)
+- [参考資料](#参考資料)
 
-# Debug APK をビルド
-./gradlew assembleDebug --console=plain
+---
 
-# APK の出力先
-# app/build/outputs/apk/debug/app-debug.apk
+## CrossPath とは
+
+災害発生直後、通信キャリアの回線は輻輳や設備損壊で使えなくなることがあります。そんな状況でも、避難所や道端ですれ違う人のスマートフォン同士は、Bluetooth さえ生きていれば直接つながります。
+
+CrossPath は、その一瞬のすれ違いを使って「自分は生きていて、どこの市町村にいるか」という最小限の情報だけを端末間でバトンのように受け渡していくアプリです。受け取った情報はさらに次にすれ違った人へ中継され、通信網が復旧しなくても、口コミのように少しずつ広がっていきます。
+
+## 解決したい課題
+
+- 災害時は通信インフラそのものが被災し、安否確認サービスが機能しないことがある
+- 遠方の家族・友人は、被災地にいる大切な人の安否を知る手段が限られる
+- 既存の安否確認は「本人が能動的に発信できる通信環境」を前提にしていることが多い
+
+CrossPath は、**通信できない前提**からスタートし、「人の移動」そのものを通信網として使うことでこの空白を埋めます。
+
+## 主な特徴
+
+### 🪶 極限まで軽い生存情報（4バイト／件）
+1件の生存情報は「個人ID（24bit）」と「生存地点（市町村コード）」だけ。登録時刻や氏名などは一切載せません。1件あたりの情報量を切り詰めることで、短いすれ違い時間でもより多くの人の情報を交換できるように設計しています。
+
+### 🔀 階層型ダイジェスト同期
+2台の端末が接続すると、まず「どのブロックにどれだけの人数がいるか」という要約（ダイジェスト）だけを比較し、差分があるブロックだけをピンポイントで交換します。全件を毎回送り直すのではなく、**まだ知らない情報だけ**を優先して伝え合う仕組みです。
+
+### ⏱️ 72時間の生存確認ウィンドウ
+市町村を確定した時点から72時間、自分の情報の発信・他者の情報の中継・保存を行います。期限が来ると通信用のデータは自動的に削除され、新しく生存登録をやり直すことで次の72時間が始まります。「今生きている」ことを示す情報であり続けるための設計です。
+
+### 📬 通知履歴は100時間保持
+72時間の通信期間が終わっても、「いつ誰の安否情報を受け取ったか」という通知履歴だけは100時間残ります。すれ違いが途切れがちな環境でも、後から確認できる余地を残しています。
+
+### 🛡️ 一度保存したら上書きしない
+同じ人のIDについて、後から違う地点の情報が届いても上書きしません。どちらが正しいかを判定する手段がない以上、「最初に受け取った情報を素直に中継し続ける」というシンプルで壊れにくいルールを徹底しています。
+
+### 🔗 マルチホップ中継
+A→B、B→Cとすれ違いをつなげていくことで、発信者と直接出会っていない人にも情報が届きます。中継のたびに情報が壊れたり増殖したりしないよう、個人IDごとの重複排除を徹底しています。
+
+## 動作イメージ
+
+1. 平常時にアプリを起動し、自分の個人IDを登録しておく
+2. 災害発生後、「生存ボタン」を押して自分がいる市町村を選択・確定する
+3. 確定と同時に72時間のカウントダウンが始まり、バックグラウンドで自動的にすれ違い通信を開始
+4. 近くを通った他の端末と自動的に情報を交換し、自分の生存情報を広めつつ、他者の情報を中継
+5. 安否を知りたい人（通知対象者）を登録しておくと、その人の情報を受信した瞬間に通知が届く
+
+```mermaid
+sequenceDiagram
+    participant A as 端末A（被災者）
+    participant B as 端末B（中継者）
+    participant C as 端末C（安否確認したい人）
+
+    A->>B: すれ違い通信（BLE）でAの生存情報を送信
+    Note over B: Aの情報を保存・保持
+    B->>C: 別のタイミングですれ違い、Aの情報を中継
+    Note over C: Aが通知対象なら即座に通知
 ```
 
-### Android Studio でのビルド
+## アーキテクチャ
 
-1. File → Open でプロジェクトルートを開く
-2. Run ボタンまたは Build → Build Bundle(s) / APK(s) → Build APK(s)
+UI・通信制御・同期ロジック・永続化を明確に分離し、通信担当メンバーとの分業境界をインターフェースとして固定しています。
 
-## インストール手順
+```mermaid
+flowchart TB
+    subgraph UI["UI 層"]
+        MA["MainActivity / Fragments"]
+        VM["HomeViewModel"]
+    end
 
-```bash
-adb install app/build/outputs/apk/debug/app-debug.apk
+    subgraph Domain["ドメイン層"]
+        Repo["SafetyRepository"]
+        Expiry["ExpiryManager"]
+        History["HistoryRetentionManager"]
+        Notify["NotificationDispatcher"]
+    end
+
+    subgraph Sync["同期エンジン"]
+        Coord["SyncCoordinator"]
+        Hier["HierarchicalDigestStrategy"]
+        Flat["FlatDigestStrategy"]
+    end
+
+    subgraph BLE["BLE 通信層"]
+        Adv["BleAdvertiser / BleScanner"]
+        Gatt["GattClient / GattServer"]
+        Codec["FrameCodec / MessageAssembler"]
+    end
+
+    subgraph Data["永続化層"]
+        Room["Room Database"]
+    end
+
+    MA --> VM --> Repo
+    Repo --> Room
+    Repo --> Expiry
+    Repo --> History
+    Repo --> Notify
+    Coord <--> Repo
+    Coord --> Hier
+    Coord --> Flat
+    Coord <--> Gatt
+    Gatt <--> Adv
+    Gatt <--> Codec
 ```
+
+- **UI 層**：XML + Java。画面遷移・入力・表示に専念し、DB や BLE を直接触らない
+- **同期エンジン**：BLE の生の API には触れず、`onEncounter` / `sendBlock` / `insertIfAbsent` といった意味付けされたインターフェース越しにのみ動作
+- **BLE 通信層**：GATT の接続・断片化・再構成を担当。担当メンバーとの実装分業を前提に境界を設計
+- **永続化層**：Room。1件のトランザクションで人物追加・通知履歴・同期用カウンタを一括更新し、整合性を保証
+
+## データ設計のこだわり
+
+| 指標 | 内容 |
+|---|---|
+| 1件あたりの通信本体サイズ | **4バイト**（個人ID 24bit ＋ 生存地点 8bit） |
+| 従来案からの削減率 | 約 **93.75%**（64B → 4B） |
+| 同じ容量に格納できる件数 | 従来比 **16倍** |
+| 保存上限設計値 | 1,300万人（個人IDは24bit空間で対応） |
+| 生存確認の有効期間 | 市町村確定から **72時間** |
+| 通知履歴の保持期間 | 通信期間終了から **100時間** |
+
+送受信フレームには通信制御用のヘッダーやCRC・ACKなどが別途必要ですが、「生存情報そのもの」を極限まで軽くすることで、限られたすれ違い時間の中で交換できる人数を最大化する方針を一貫させています。
+
+## 技術スタック
+
+| 分類 | 採用技術 |
+|---|---|
+| 言語 / OS | Java / Android（最低 API 31 を試作の下限に設定） |
+| IDE | Android Studio |
+| 端末間通信 | Bluetooth Low Energy（BLE） / GATT |
+| ローカル DB | Room（SQLite） |
+| UI | XML レイアウト + Java |
+| 非同期処理 | `ExecutorService` / `ScheduledExecutorService` |
+| バックグラウンド常駐 | Foreground Service |
+
+スレッド設計として、UI操作・通信制御・DB書き込みをそれぞれ専用の Executor に分離し、BLE のコールバックから直接 DB を触らない構成にしています。
 
 ## 画面構成
 
-プロジェクトは仕様書 v0.8 第11章に基づき、6つの画面（SC01〜SC06）で構成される。
-UI・Room・Android通知・期限再評価を接続済み。BLE／同期／通信Foreground Serviceと登録APIは別担当の接続待ち。詳細な要件分類・接続契約・検証結果は [設計照合記録](docs/remaining-features.md) を参照。
-
-| 画面ID | 画面名 | Fragment クラス | レイアウトファイル |
-|---|---|---|---|
-| SC01 | 初回登録 | `Sc01RegistrationFragment` | `fragment_sc01_registration.xml` |
-| SC02 | ホーム | `Sc02HomeFragment` | `fragment_sc02_home.xml` |
-| SC03 | 市町村選択 | `Sc03MunicipalityFragment` | `fragment_sc03_municipality.xml` |
-| SC04 | 緊急時画面 | `Sc04EmergencyFragment` | `fragment_sc04_emergency.xml` |
-| SC05 | 通知対象者管理 | `Sc05WatchTargetFragment` | `fragment_sc05_watch_target.xml` |
-| SC06 | 通知履歴 | `Sc06NotificationHistoryFragment` | `fragment_sc06_notification_history.xml` |
-
-下部タブバー（ホーム／通知対象者／通知画面）は **SC02・SC04・SC05・SC06 で共通**。
-登録フローの SC01（初回登録）・SC03（市町村選択）には表示しない。
-タブの実装は `res/layout/include_bottom_tabs.xml` ＋ `res/menu/menu_bottom_tabs.xml` ＋ `ui/BottomTabs.java`。
-
-タブバーは **Activity 直下**（`activity_main.xml` の `bottom_tabs_container`）に置き、`MainActivity` が
-唯一の保持者として表示・テーマ・選択状態を管理する（ページ＝Fragment の中には置かない）。
-そのためページ遷移アニメーションでは動かず、背景は画面全幅（端から端・下端まで）に広がる。
-72時間タイマー作動中は全画面とタブバーをダーク表示する。
-
-タブバーでホームを選ぶと、タイマー作動中は SC04、それ以外は SC02 を表示する
-（判定は `UiData.isTimerActive()` = `ActiveSession` の実データ）。
-
-### 補助ファイル
-
-| 役割 | ファイル |
+| 画面 | 役割 |
 |---|---|
-| 画面ID enum | `ui/Screen.java` |
-| テーマ適用ヘルパ | `ui/theme/ScreenThemes.java` |
-| 遷移ヘルパ | `ui/theme/NavTransitions.java` |
-| 出現アニメーションヘルパ | `ui/theme/ViewAnims.java` |
-| 下部タブバー | `ui/BottomTabs.java`・`res/layout/include_bottom_tabs.xml`・`res/menu/menu_bottom_tabs.xml` |
-| データアクセス口（UI から DB への唯一の経路） | `ui/data/UiData.java` |
-| 本人プロファイル（名前の保存。個人IDはIDサーバーの採番値を保存） | `ui/data/UserProfile.java` |
-| 個人IDの初回登録（サーバー通信・冪等リトライ・secret 保存） | `registration/`（`RegistrationRepository` ほか） |
-| 共通リソース（色） | `res/values/colors.xml` |
-| 共通リソース（テーマ） | `res/values/themes.xml` |
-| 共通リソース（寸法） | `res/values/dimens.xml` |
-| 共通リソース（文字列） | `res/values/strings.xml` |
-| 共通リソース（スタイル） | `res/values/styles.xml` |
+| ホーム | 生存ボタン、自分のID表示・共有、各種メニューへの入口 |
+| 市町村選択 | 生存地点として送信する市町村を選択・確定 |
+| 緊急時画面 | 72時間のカウントダウンと、通知対象者の受信状況（〇／ー）を表示 |
+| 通知対象者管理 | 安否を知りたい相手の個人IDを登録 |
+| 通知履歴 | 通知対象者について、今回の通信期間内での受信状況を確認 |
 
-## テーマ構成
+「〇」は今回の通信期間内で受信済みであることを示すシンプルな記号で、現在の安全や現在地を保証するものではない、という前提を画面設計全体で一貫させています。
 
-| 画面 | テーマ | 基準色 |
-|---|---|---|
-| SC01・SC02・SC03・SC05・SC06 | `Theme.Survival.Light` (Material3 Light) | `#42EB93` |
-| SC04 のみ | `Theme.Survival.EmergencyDark` (Material3 Dark) | `#B01735` |
+## 実装ロードマップ
 
-OS のダーク設定にかかわらず画面ごとに固定テーマを適用する。
+段階を追って機能を積み上げ、各段階で完了条件を確認してから次へ進む方針で開発しています。
 
-## 画面遷移図
+- [ ] **Stage 1** — 2台間の BLE 通信基盤（広告・探索・接続・分割送受信）
+- [ ] **Stage 2** — Room への保存と個人ID単位の重複排除
+- [ ] **Stage 3** — 3台以上でのマルチホップ中継
+- [ ] **Stage 4** — 通知対象管理と通知履歴
+- [ ] **Stage 5** — 72時間の期限管理と自動削除・再登録
+- [ ] **Stage 6** — ID一覧の差分交換による無駄な再送の抑制
+- [ ] **Stage 7** — 階層型ダイジェスト同期による大規模データセットへの対応
 
-```
-SC01 (初回登録) ──登録成功──→ SC02
-                                    │
-                           生存ボタン↓
-                                    │
-                               SC03 (市町村選択)
-                                    │
-                              確定→ SC04 (緊急時画面)
-                                    │
-                        72時間経過↓
-                                    │
-                                SC02 (期限終了)
+## 開発体制
 
- タブバー（SC02・SC04・SC05・SC06 で共通）
-   ┌──────────────┬──────────────┐
-   │   ホーム      │  通知対象者   │  通知画面     │
-   └──────────────┴──────────────┴─────────────┘
-      SC02/SC04         SC05            SC06
-      （3画面をタブで行き来）
-```
+本プロジェクトはハッカソンでの短期集中開発として、BLE通信の実装担当と、Room・画面・期限管理・同期ロジックの実装担当とでインターフェースを介した分業を行っています。まずは実機2台（Galaxy / Pixel）間での生存情報交換の成功をデモの第一目標としています。
 
-※ ホームタブはタイマー作動中は SC04、それ以外は SC02 を表示する。タブ切り替えは
-`replace`（バックスタックへ積まない）。SC01→SC02・SC02→SC03・SC03→SC04 は既存の階層遷移。
+## 参考資料
 
-## アイコンの運用
+- [Bluetooth permissions（Android Developers）](https://developer.android.com/develop/connectivity/bluetooth/bt-permissions)
+- [Communicate in the background（Android Developers）](https://developer.android.com/develop/connectivity/bluetooth/ble/background)
+- [Transfer BLE data（Android Developers）](https://developer.android.com/develop/connectivity/bluetooth/ble/transfer-ble-data)
+- [Room Transaction（Android Developers）](https://developer.android.com/reference/androidx/room/Transaction)
 
-アイコンは **Material Symbols**（Google Fonts 配信の公式アイコン）を Android の
-vector drawable XML に変換して取り込む。`material-icons-extended` は Jetpack Compose 専用のため
-Java＋XML の本プロジェクトでは使わない。
+---
 
-取得は任意のアイコン名を変数に書けるツールで行う（既定アイコン一覧・--fill の詳細はツール冒頭を参照）：
-
-```bash
-# 既定アイコンの outline 版を取得
-python3 tools/fetch_material_symbols.py
-
-# タブ選択用の fill（塗り）版も併せて取得
-python3 tools/fetch_material_symbols.py --fill
-```
-
-出力は `app/src/main/res/drawable/ic_<name>_24.xml`（outline）／`ic_<name>_fill_24.xml`（fill）。
-アイコンの追加は【既定アイコン一覧】(下記) に名前を足すだけで再取得できる。
-
-### 既定アイコン一覧
-
-| 用途 | アイコン名（drawable） |
-|---|---|
-| タブ: ホーム | `ic_home_24` / `ic_home_fill_24` |
-| タブ: 通知対象者 | `ic_group_24` / `ic_group_fill_24` |
-| タブ: 通知画面 | `ic_notifications_24` / `ic_notifications_fill_24` |
-| 個人ID | `ic_badge_24` |
-| コピー / 共有 / 削除 | `ic_content_copy_24` / `ic_share_24` / `ic_delete_24` |
-| 生存登録 / 緊急 | `ic_sos_24` |
-| カウントダウン | `ic_timer_24` |
-| 通知履歴の見出し | `ic_history_24` |
-| 現在地 / 確定 | `ic_location_on_24` / `ic_check_24` |
-| 成功 / 失敗 | `ic_check_circle_24` / `ic_error_24` |
-| 通信状態 / Bluetooth無効 | `ic_sync_24` / `ic_bluetooth_disabled_24` |
-| 対象者 / 追加 | `ic_person_24` / `ic_person_add_24` |
-| 遷移（矢印） | `ic_arrow_forward_24`（`android:autoMirrored="true"`） |
-
-### 技術メモ
-
-Material Symbols の配信 SVG は `viewBox="0 -960 960 960"`（960 グリッド・y 軸が負）。
-Android vector には viewBox の最小座標が無いため、`viewportWidth/Height=960`（`width=24dp / height=24dp`）とし、
-全 `<path>` を `<group android:translateY="960">` で囲んで y を 0..960 へ移して vector drawable 化している
-（`viewportWidth=24` にすると y が -960..0 のまま残り、何も描画されない）。
-色は必ずテーマから取る（`app:iconTint` / `app:startIconTint` / `app:tint` に `?attr/...`）。
-
-## アニメーション方針
-
-画面遷移は Material の **SharedAxis**（タブ切り替え = X 軸、階層遷移 = Z 軸）を使う。
-画面内の出現は alpha＋translationY の**1回だけ**のアニメーション。
-**点滅・ループ・常時の警告アニメーションは使わない**（動きは「遷移」「出現」「操作」に紐づく1回のみ）。
-実装は `ui/theme/NavTransitions.java`（遷移）と `ui/theme/ViewAnims.java`（出現）に集約している。
-
-## 緊急時モード（Emergency Mode）
-
-緊急時モードは未満了の期間がある状態（ACTIVE または CLOCK_UNCERTAIN）を指す。通信可能とは限らない。
-
-- **モードの保持:** `MainActivity` が唯一の保持者（`emergencyMode` フィールド）。フラグメントは `onSessionStatus` で Activity に状態を通知する。
-- **モード中の画面:** ホームは常に SC04（緊急時画面）を表示する。全画面をダークテーマで表示する（設計書§11.11から利用者指定で変更）。期間終了時は表示中の画面とタブバーをライトへ戻す。
-- **起動時の初期画面:** セッション状態（`UiData.checkSession`）が確定してから決定する。未登録→SC01、緊急時モード→SC04、それ以外→SC02。状態未確認では操作を開始せず、保存状態の読み込み失敗時は再試行を案内する。
-- **モード切替:** 緊急時モードが変わったらテーマを再適用し、必要に応じて現在の画面を作り直す（SC02↔SC04 の遷移）。
-
-## データ層との統合
-
-UI は DB を直接触らず、`ui/data/UiData.java` を通して `data/SafetyRepository` だけを呼ぶ
-（`CompletableFuture` の結果は `UiData.onResult` がメインスレッドへ返す）。
-
-| 画面 | 実データの使い方 |
-|---|---|
-| SC01 | `UserProfile.register()`（非同期・永続保存）から IDサーバー `POST /v1/registrations` で採番された個人IDを取得して保存（§「初回登録（IDサーバー接続）」）。端末内でランダムIDは発行しない |
-| SC02 | 自分の個人ID（`UserProfile`）を表示・コピー・共有。生存登録はタイマー作動中なら SC04、停止中は SC03 |
-| SC03 | `KyushuMunicipalities.prefectures()`（同梱の九州自治体マスター）で県・市町村を選択し、確定操作時刻のトークンを渡して `startSessionAtConfirmation()` |
-| SC04 | `checkSession()` で期限判定（`checkAndEndExpiredSession()`）を伴う状態取得→`SessionStatus` に応じて`remainingMillis` のスナップショットを1秒ずつ減らして表示（0で再確認→SC02 へ）。`currentWatchStatuses()` で〇／ーを表示 |
-| SC05 | `watchTargets()` / `addWatchTarget()` / `deleteWatchTarget()` で通知対象を CRUD（重複は DB の戻り値で判定） |
-| SC06 | `currentWatchStatuses()` で今回の受信状態を表示。通知権限・配信状態・再試行も表示 |
-
-- 〇＝`RECEIVED`（今回のACTIVE期間に受信）、ー＝`NOT_RECEIVED`、全件 `NO_ACTIVE_SESSION`＝「現在の通信期間なし」、0件＝「通知対象者が登録されていません」。
-- `currentWatchStatuses()` は履歴から導出しない。履歴表示（`validHistories()`）は今回の画面では未使用。
-- 期限判定は `checkAndEndExpiredSession()` 一本化。カウントダウンは `remainingMillis` の表示スナップショットであり、期限判定はデータ層が行う。
-- `UiData.setSessionStopHandler()` に通信所有者の停止処理を接続する。既定では通信未接続と表示し、動作中とは表示しない。
-
-### 緊急時モードと画面遷移（§11.1 / §11.5 / §11.8）
-
-- **緊急時モード = 「未満了の期間がある」（`SessionStatus.State.ACTIVE` または `CLOCK_UNCERTAIN`）**。
-  `SessionStatus.canCommunicate`（ACTIVE かつ relayEnabled）ではない。通信不能・時計不確実は
-  「72時間の期間が終了した」ことではないため、画面を SC02 へ戻さない（§11.5）。
-- 判断は `ui/ScreenPolicy` に集約した純粋関数（`isActivePeriod` / `emergencyMode` / `commState` /
-  `screenFor` / `initialScreen` / `backTarget` / `commStatusRes` / `blockReasonRes`）。
-  `SessionStatus.State` と `relayEnabled` だけを入力にするので JVM のユニットテストで検証できる。
-- SC04 の表示内容（カウントダウン可否・通信状態・通信不能理由・一覧の有無・代替文言）は
-  `ui/Sc04ViewState` が決める。通信不能（`relayEnabled == false`）でも期間が続いていれば
-  対象者一覧（〇／ー）とカウントダウンを表示し、理由文だけを併記する（§11.5）。
-  `CLOCK_UNCERTAIN` は残り時間が確定できないためカウントダウンを止め、時計確認を明示する。
-- 期限終了（`EXPIRED`／`ENDED`／`NO_SESSION`）は `UiData.checkSession()` が
-  `checkAndEndExpiredSession()`（終了＋レコード削除を同一トランザクション）を経た状態を返すため、
-  それを受けて SC02 へ遷移する（削除処理完了後に画面が戻る。UI 側で期限処理はしない）。
-- 画面遷移は `ui/Navigator`（`MainActivity` が `ui/NavHost` を実装）に一元化した。フラグメントは
-  `((NavHost) requireActivity()).navigatePush/navigateBack/navigateTab(...)` で依頼するだけで、
-  自分で `FragmentTransaction` を実行しない。**`addToBackStack` は使わない**（階層は線形フロー）ため、
-  戻る操作で古い SC03・古い SC04（期限終了後）へ戻る経路が存在しない。
-  現在画面の唯一の保持者も `Navigator` で、遷移と同時に更新する。
-- システムの戻る操作は `ScreenPolicy.backTarget()` に従う（SC03 で確定前に戻る → SC02。
-  それ以外の画面は仕様に規定が無いため既定動作＝アプリ終了）。
-
-## 未実装の範囲
-
-以下は **実装していない**：
-
-- BLE/GATT 通信（SC04 の通信状態表示は「通信期間中／通信できません／未開始」の段階表示。
-  通信不能理由の実検知は BLE・権限・Foreground Service の実装後）
-- 個人ID の再発行・復旧 UI（`GET /v1/registrations/me` による復旧は `RegistrationRepository` に実装済みだが画面は無い）
-- Foreground Service
-- Android 通知の発行（`NotificationHistory` の PENDING/POSTED/BLOCKED を使う Dispatcher）
-- 登録失敗時の詳細表示（`X-Trace-Id` を画面に出さずログのみ）
-- ViewModel 層（現状は Fragment から `UiData` を直接呼ぶ薄い構成）
-- BLE/Service の実停止処理（`SessionStopHandler` の実通信停止）
-
-## 初回登録（IDサーバー接続）
-
-SC01 の「登録する」で、IDサーバーから 24bit の個人IDを取得して保存する。端末内でIDを生成する旧実装（乱数）は廃止した。
-
-| 項目 | 内容 |
-|---|---|
-| エンドポイント | `POST https://id-server-1084526017972.asia-northeast1.run.app/v1/registrations`（再取得は `GET /v1/registrations/me`） |
-| 認証 | `Authorization: Bearer <registration_secret>`。secret は 32 バイト乱数の base64url（パディング無し43文字）を端末で生成 |
-| 冪等性 | `request_id`（UUID v4）を `UserProfile` が**通信前に保存**し、リトライでは同じ値を再利用する（同じ secret＋同じ request_id は 200 で同じ user_id が返る） |
-| 競合復旧 | 409 のときは `GET /v1/registrations/me` で保存済みIDの復旧を試みる |
-| リトライ | 429 / 408 / 5xx は `Retry-After` を尊重し、無ければ指数バックオフ（1s→2s→4s、±20%ジッター、最大4試行）。400 / 401 / 409 / 410 / `ID_SPACE_EXHAUSTED` はリトライしない |
-| 保存 | `SharedPreferences`（`user_profile`）の 1 か所にまとめる。`personal_id` / `name` / `request_id` / `identity_source` は `UserProfile`、`secret`（**AndroidKeyStore の AES/GCM 鍵で暗号化**。平文保存へのフォールバックはしない） / `user_id` / `created_at` は `PrefsRegistrationStore` が担当 |
-| 通信スレッド | 単一の `ExecutorService`。UI スレッドでは通信しない（結果は Handler で main へ post） |
-
-実装は `app/src/main/java/com/example/crosspath/registration/` に集約する。呼び出しの流れは
-`Sc01RegistrationFragment` → `UserProfile.register()` → `RegistrationProvider.gateway(context)`（本番は `ServerRegistrationGateway`）
-→ `RegistrationRepository` → `HttpRegistrationApi` / `PrefsRegistrationStore`。debug / release とも同じ本番実装を使う（デモ用の ID 手入力は廃止）。
-
-| クラス | 役割 |
-|---|---|
-| `RegistrationProvider` / `RegistrationGateway` | 登録処理の組み立てと継ぎ目。本番は `ServerRegistrationGateway` を返す（計測テストのみ `overrideGatewayForTests` で差し替え） |
-| `ServerRegistrationGateway` | `RegistrationGateway` の本番実装。`request_id` を受けて採番された `user_id` を返す薄いアダプタ |
-| `RegistrationRepository` | 登録操作の全体（冪等性・リトライ・競合復旧）。`RegistrationHttp` と `RegistrationStore` を注入して受け取る |
-| `HttpRegistrationApi` / `RegistrationHttp` | `HttpURLConnection` 実装（connect 5s / read 10s）と差し替え可能なインターフェース |
-| `PrefsRegistrationStore` / `RegistrationStore` | secret・request_id・user_id・created_at の永続化（テスト用に `InMemoryRegistrationStore`） |
-| `RegistrationSecret` / `RegistrationJson` / `RegistrationResponse` / `RegistrationRetryPolicy` / `RegistrationError` / `RegistrationException` | 純粋ロジック（JVM ユニットテスト対象） |
-
-ユニットテストは `app/src/test/java/com/example/crosspath/registration/`（`RegistrationRepositoryTest` は偽 HTTP で request_id の再利用・409→me 復旧・秘密値の非漏洩、`ServerRegistrationGatewayTest` は request_id の受け渡しと登録済み端末で通信しないことを検証）。
+<p align="center">
+  <sub>すれ違う一人ひとりが、次のバトンになる。</sub>
+</p>
