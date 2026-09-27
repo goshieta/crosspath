@@ -12,7 +12,7 @@ import java.util.function.*;
  * FULL exchange, serialized on protocolExecutor. One unacknowledged DATA and one DB
  * transaction per direction. Create a new instance for every BLE connection.
  */
-public final class FullSyncCoordinator {
+public final class FullSyncCoordinator implements SyncExchange {
     private boolean debugPauseAck;
 
     /** Configure before ready(); intentionally no release in the same connection. */

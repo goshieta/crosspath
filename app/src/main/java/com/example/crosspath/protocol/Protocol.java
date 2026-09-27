@@ -11,6 +11,8 @@ public final class Protocol {
     public static final int MAJOR = 4, MINOR = 0, MAX_BODY = 4096, HEADER = 10;
     public static final int HELLO = 1, BEGIN = 2, DATA = 5, ACK = 6, TURN_END = 7, DONE = 8;
     public static final int FULL = 1, CAP_FULL = 1;
+    public static final int FLAT = 2, HIERARCHICAL = 3, CAP_FLAT = 4, CAP_HIERARCHICAL = 8;
+    public static final int SUMMARY = 3, REQUEST = 4, L1_PAGE = 10, L2_REQUEST = 11, L2_RESPONSE = 12, ID_LIST = 13;
     // Explicit TEST profile mapping to kyushu-2026-09-26-v1; not a hash or official master ID.
     public static final int KYUSHU_TEST_MASTER = 0x20260926;
     public static final long OP_TIMEOUT_MS = 10_000, CONNECTION_TIMEOUT_MS = 45_000;

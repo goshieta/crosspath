@@ -49,6 +49,59 @@ import com.google.android.material.color.MaterialColors;
  * この Activity は {@link NavHost} として遷移要求を受け付ける。
  */
 public class MainActivity extends AppCompatActivity implements NavHost {
+    private boolean relayVisible, relayRequested, permissionAsked;
+    private SessionStatus relaySession;
+    private final androidx.activity.result.ActivityResultLauncher<String[]> relayPermissions = registerForActivityResult(
+            new androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(), result -> {
+                relayRequested = false;
+                if (com.example.crosspath.service.RelayForegroundService.hasPermissions(this)) ensureRelay();
+                else relayBlocked("付近のデバイス権限が必要です。「通信を再開」から設定できます");
+            });
+
+    private void relayBlocked(String message) {
+        ((CrosspathApplication) getApplication()).relayStatus.setValue(new com.example.crosspath.service.RelayStatus(
+                com.example.crosspath.service.RelayStatus.State.BLOCKED, message, ""));
+    }
+    private void ensureRelay() {
+        if (!relayVisible || relaySession == null || !relaySession.canCommunicate || relayRequested
+                || ((CrosspathApplication) getApplication()).bleDebugActive) return;
+        boolean notificationMissing = android.os.Build.VERSION.SDK_INT >= 33
+                && androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED
+                && !getSharedPreferences("relay-ui", MODE_PRIVATE).getBoolean("notificationAsked", false);
+        if (!permissionAsked && (notificationMissing || !com.example.crosspath.service.RelayForegroundService.hasPermissions(this))) {
+            permissionAsked = true;
+            java.util.ArrayList<String> requested = new java.util.ArrayList<>();
+            if (!com.example.crosspath.service.RelayForegroundService.hasPermissions(this))
+                java.util.Collections.addAll(requested, com.example.crosspath.service.RelayForegroundService.BLE_PERMISSIONS);
+            if (notificationMissing) {
+                requested.add(android.Manifest.permission.POST_NOTIFICATIONS);
+                getSharedPreferences("relay-ui", MODE_PRIVATE).edit().putBoolean("notificationAsked", true).apply();
+            }
+            relayPermissions.launch(requested.toArray(new String[0]));
+            return;
+        }
+        if (!com.example.crosspath.service.RelayForegroundService.hasPermissions(this)) {
+            relayBlocked("付近のデバイス権限を許可してください");
+            return;
+        }
+        String reason = com.example.crosspath.service.RelayForegroundService.unavailableReason(this);
+        if (reason != null) { relayBlocked(reason); return; }
+        try {
+            androidx.core.content.ContextCompat.startForegroundService(this,
+                    new android.content.Intent(this, com.example.crosspath.service.RelayForegroundService.class));
+            relayRequested = true;
+        } catch (RuntimeException failure) { relayBlocked("通信を開始できません。「通信を再開」を押してください"); }
+    }
+    public void retryRelay() {
+        relayRequested = false;
+        if (!com.example.crosspath.service.RelayForegroundService.hasPermissions(this) && permissionAsked) {
+            startActivity(new android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    android.net.Uri.parse("package:" + getPackageName())));
+            return;
+        }
+        UiData.checkSession(this::onSessionStatus, error -> relayBlocked("登録状態を確認できません"));
+    }
 
     private FragmentContainerView fragmentContainer;
     private FrameLayout tabBarContainer;
@@ -94,7 +147,11 @@ public class MainActivity extends AppCompatActivity implements NavHost {
         setContentView(R.layout.activity_main);
         View bleDebug = findViewById(R.id.open_ble_debug);
         bleDebug.setVisibility(BuildConfig.DEBUG ? View.VISIBLE : View.GONE);
-        bleDebug.setOnClickListener(v -> startActivity(new android.content.Intent(this, BleDebugActivity.class)));
+        bleDebug.setOnClickListener(v -> {
+            ((CrosspathApplication) getApplication()).bleDebugActive = true;
+            stopService(new android.content.Intent(this, com.example.crosspath.service.RelayForegroundService.class));
+            startActivity(new android.content.Intent(this, BleDebugActivity.class));
+        });
 
         fragmentContainer = findViewById(R.id.fragment_container);
         tabBarContainer = findViewById(R.id.bottom_tabs_container);
@@ -136,8 +193,12 @@ public class MainActivity extends AppCompatActivity implements NavHost {
     @Override
     protected void onResume() {
         super.onResume();
+        relayVisible = true;
+        relayRequested = false;
         UiData.checkSession(this::onSessionStatus, error -> {});
     }
+
+    @Override protected void onPause() { relayVisible = false; super.onPause(); }
 
     /**
      * 緊急時モードの状態を Activity 外部（フラグメント）に公開する。
@@ -176,6 +237,12 @@ public class MainActivity extends AppCompatActivity implements NavHost {
      * 緊急時モードの変化に応じてテーマ再適用・画面遷移・Fragment 再生成を行う。
      */
     public void onSessionStatus(@Nullable SessionStatus status) {
+        relaySession = status;
+        if (status != null && status.canCommunicate) ensureRelay();
+        else if (status != null) {
+            relayRequested = false;
+            stopService(new android.content.Intent(this, com.example.crosspath.service.RelayForegroundService.class));
+        }
         SessionStatus.State state = status == null ? null : status.state;
         boolean emergency = ScreenPolicy.emergencyMode(state);
 

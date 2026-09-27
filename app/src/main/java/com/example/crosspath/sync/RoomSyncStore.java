@@ -5,13 +5,17 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 
-public final class RoomSyncStore implements SyncStore {
+public final class RoomSyncStore implements DeltaSyncStore {
     private final SafetyRepository repository;
     private final String sessionId;
     public RoomSyncStore(SafetyRepository repository, String sessionId) {
         this.repository = repository; this.sessionId = sessionId;
     }
     @Override public CompletableFuture<Snapshot> snapshot() { return repository.snapshot(sessionId); }
+    @Override public CompletableFuture<Summary> summary() { return repository.syncSummary(sessionId); }
+    @Override public CompletableFuture<byte[]> idDigest(Snapshot s) { return repository.idDigest(s); }
+    @Override public CompletableFuture<byte[]> bitmap(Snapshot s, int block) { return repository.syncBitmap(s, block); }
+    @Override public CompletableFuture<List<WireRecord>> records(Snapshot s, int[] ids) { return repository.syncRecords(s, ids); }
     @Override public CompletableFuture<List<WireRecord>> page(Snapshot s, int after, int through, int limit) {
         return repository.snapshotPage(s, after, through, limit);
     }
@@ -31,4 +35,3 @@ public final class RoomSyncStore implements SyncStore {
         });
     }
 }
-

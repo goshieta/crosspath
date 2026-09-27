@@ -39,13 +39,15 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## 画面構成
 
 プロジェクトは仕様書 v0.8 第11章に基づき、6つの画面（SC01〜SC06）で構成される。
-UI とデータ層（Room）、BLE検証画面を統合済み。Foreground Service・Android通知の発行は未実装。
+UI・Room・BLE同期を統合済み。通常画面からconnectedDevice型Foreground Serviceで自動探索・同期を開始します。
+対象者へのAndroid安否通知のDispatcherは未実装（中継サービスの常駐通知とは別）です。
+通常画面への組み込み内容と確認範囲は [通常画面の中継サービス](docs/RELAY_SERVICE.md) を参照してください。
 
 ## mainとBLE実装の統合
 
 - 通常の起動先はmain由来の `MainActivity`（SC01〜SC06）です。
 - debug版の画面上部にある「BLE検証画面を開く」から `BleDebugActivity` を開けます。
-  Client／Server／AUTO、MTU23、保存後ACK待機を従来どおり試験できます。
+  Client／Server／AUTO、MTU23、保存後ACK待機に加え、FULL／FLAT／HIERARCHICALを選択できます。
   release版は入口を非表示にし、このActivityをManifestへ登録しません。
 - `CrosspathApplication` がRoom・DB用Executor・`SafetyRepository`を1組だけ所有し、
   `UiData` とBLEが共有します。通常画面で確定した市町村・72時間期間をBLE開始時にも使用します。
@@ -57,7 +59,7 @@ UI とデータ層（Room）、BLE検証画面を統合済み。Foreground Servi
   `SessionTransportGate` が各BLEコールバック・送信フラグメントで残り時間と時計を確認し、
   BLE画面での定期判定も同じRepositoryへ接続します。保存・snapshot取得も同じ期限判定を使います。
 - BLE通信は検証画面表示中のみ、手動開始です。通常画面の表示だけでは広告・探索を開始しません。
-  通常画面への自動通信接続、画面消灯中の通信、再探索、通知Dispatcherは次の実装対象です。
+  通常画面への自動通信接続、画面消灯中の通信、自動再探索、通知Dispatcherは次の実装対象です。
 
 既存のBLE試験手順と端末での検証記録は [BLE_VERIFICATION.md](docs/BLE_VERIFICATION.md) に保持しています。
 統合前の実機成功記録を、統合後APKの実機検証済みという意味には扱いません。
@@ -70,10 +72,23 @@ UI とデータ層（Room）、BLE検証画面を統合済み。Foreground Servi
 - `lintDebug`：エラー0件、警告37件。main由来のImageViewのtint属性4件を修正。
 - Room同期からUIの受信状態・通知履歴への反映、snapshotの時計異常拒否、
   UIとBLEのRepository共有を確認するinstrumentation testを追加し、テストAPKをビルド。
-  接続端末がないため、これらの端末上での実行と統合後のBLE再試験は未実施。
+  その後Galaxy SC-51Aへ統合版とテストAPKを上書きインストールし、instrumentation testは
+  58件すべて成功（5.85秒）。共有Repository、Room保存、期限管理、DB移行を含みます。
+  MainActivityの起動も `Status: ok`。
+- Galaxyで通常画面からBLE検証画面へ移動し、登録情報の保持、Server開始・停止、
+  通常画面への復帰ができたとの利用者報告あり。統合後の2台BLE再試験は未実施。
 
 実機では更新インストール後、通常画面→BLE検証画面で既存登録を確認し、
 2台FULL交換→通常画面へ戻って対象者の受信状態を確認してください。
+
+### 第10章の追加
+
+差分・階層同期、L1／L1'の短い形式の選択、L2による同件数別IDの照合、
+保存後ACKごとの交互転送、共有予算、再接続抑制、期間・revision付きキャッシュを追加しました。
+検証画面の初期選択はHIERARCHICALです。従来の試験にはFULLを選んでください。
+仕様上の暫定値、統計の測定範囲、試験手順は [CHAPTER10_SYNC.md](docs/CHAPTER10_SYNC.md) を参照してください。
+追加後のJVMテストは101件、Galaxyのinstrumentation testは61件が成功しています。
+第10章の2台実BLE試験は未実施です。
 
 | 画面ID | 画面名 | Fragment クラス | レイアウトファイル |
 |---|---|---|---|
@@ -226,7 +241,7 @@ UI は DB を直接触らず、`ui/data/UiData.java` を通して `data/SafetyRe
 - 〇＝`RECEIVED`（今回のACTIVE期間に受信）、ー＝`NOT_RECEIVED`、全件 `NO_ACTIVE_SESSION`＝「現在の通信期間なし」、0件＝「通知対象者が登録されていません」。
 - `currentWatchStatuses()` は履歴から導出しない。履歴表示（`validHistories()`）は今回の画面では未使用。
 - 期限判定は `checkAndEndExpiredSession()` 一本化。カウントダウンは `remainingMillis` の表示スナップショットであり、期限判定はデータ層が行う。
-- `SessionStopHandler` はApplicationのレジストリ経由で該当期間のBLE通信を停止します。Serviceは未実装です。
+- `SessionStopHandler` はApplicationのレジストリ経由で該当期間の検証画面・中継Serviceの通信を停止します。
 
 ### 緊急時モードと画面遷移（§11.1 / §11.5 / §11.8）
 
@@ -255,11 +270,9 @@ UI は DB を直接触らず、`ui/data/UiData.java` を通して `data/SafetyRe
 
 以下は **実装していない**（TODO コメントを残している）：
 
-- 通常画面からの自動BLE/GATT通信（SC04は期間の状態表示。通信操作はdebugのBLE検証画面）
-- 差分同期・階層同期、接触終了後の自動再探索とbackoff
 - 個人ID のサーバ発行（現状は端末内生成のみ）
-- Foreground Service
 - Android 通知の発行（`NotificationHistory` の PENDING/POSTED/BLOCKED を使う Dispatcher）
 - 登録 API（サーバ側の本人登録）
 - ViewModel 層（現状は Fragment から `UiData` を直接呼ぶ薄い構成）
-- Foreground Serviceへの停止・復元の接続（検証画面のBLE停止は接続済み）
+- MTU23での階層要約の転送時間改善（現在の2台試験では45秒で未完了）
+- 統合後の通常画面での2台自動同期・画面消灯・権限取り消し・サービス再生成の実機受入

@@ -15,6 +15,7 @@ public final class SessionStatus {
     public final long startedAtWall;
     public final long endsAtWall;
     public final long remainingMillis;
+    public final long dataRevision;
     /** Also respects the persisted relayEnabled flag. */
     public final boolean canCommunicate;
 
@@ -24,6 +25,7 @@ public final class SessionStatus {
         startedAtWall = session == null ? 0 : session.startedAtWall;
         endsAtWall = session == null ? 0 : session.endsAtWall;
         this.remainingMillis = remainingMillis;
+        dataRevision = session == null ? 0 : session.dataRevision;
         canCommunicate = state == State.ACTIVE && session.relayEnabled;
     }
 

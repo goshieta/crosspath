@@ -40,6 +40,9 @@ public class Sc04EmergencyFragment extends Fragment {
     private TextView commStatusText;
     private TextView blockReasonText;
     private TextView noSessionText;
+    private TextView syncResult;
+    private View retryRelay;
+    private com.example.crosspath.service.RelayStatus relayStatus;
     private RecyclerView safetyList;
 
     private final Handler countdownHandler = new Handler(Looper.getMainLooper());
@@ -108,9 +111,14 @@ public class Sc04EmergencyFragment extends Fragment {
         blockReasonText = view.findViewById(R.id.sc04_block_reason);
         noSessionText = view.findViewById(R.id.sc04_no_session_text);
         safetyList = view.findViewById(R.id.sc04_safety_list);
+        syncResult = view.findViewById(R.id.sc04_sync_result);
+        retryRelay = view.findViewById(R.id.sc04_retry_relay);
+        retryRelay.setOnClickListener(v -> ((MainActivity) requireActivity()).retryRelay());
+        com.example.crosspath.CrosspathApplication app = (com.example.crosspath.CrosspathApplication) requireActivity().getApplication();
+        app.relayStatus.observe(getViewLifecycleOwner(), value -> { relayStatus = value; applyViewState(); });
+        app.relayDataChanges.observe(getViewLifecycleOwner(), value -> loadWatchStatuses());
 
         // 通信不能理由は初期非表示（§11.5: BLE無効・権限不足・保存失敗のときだけ表示）
-        // TODO(段階5: BLE の実状態に応じて理由文言を設定・表示する)
         blockReasonText.setVisibility(View.GONE);
 
         // SC04 のダークテーマを画面全体へ適用
@@ -219,6 +227,17 @@ public class Sc04EmergencyFragment extends Fragment {
         } else {
             blockReasonText.setVisibility(View.GONE);
         }
+
+        boolean eligible = status != null && status.canCommunicate;
+        boolean blocked = relayStatus == null || relayStatus.state == com.example.crosspath.service.RelayStatus.State.BLOCKED
+                || relayStatus.state == com.example.crosspath.service.RelayStatus.State.STOPPED;
+        if (eligible) {
+            commStatusText.setText(relayStatus == null ? "通信は開始されていません" : relayStatus.message);
+            blockReasonText.setVisibility(blocked ? View.VISIBLE : View.GONE);
+            if (blocked) blockReasonText.setText("通信できない間も登録期間は進みます");
+        }
+        syncResult.setText(eligible && relayStatus != null ? relayStatus.lastResult : "");
+        retryRelay.setVisibility(eligible && blocked ? View.VISIBLE : View.GONE);
 
         // 「現在の通信期間なし」「通知対象者が登録されていません」
         if (vs.emptyTextRes != 0) {

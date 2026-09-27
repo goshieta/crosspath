@@ -12,6 +12,17 @@
             android:labelFor="@id/role" android:text="@string/ble_role" android:paddingTop="16dp" />
         <Spinner android:id="@+id/role" android:layout_width="match_parent" android:layout_height="48dp" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:labelFor="@id/sync_mode" android:text="@string/ble_sync_mode" />
+        <Spinner android:id="@+id/sync_mode" android:layout_width="match_parent" android:layout_height="48dp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:labelFor="@id/byte_budget" android:text="@string/ble_byte_budget" />
+        <EditText android:id="@+id/byte_budget" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:minHeight="48dp" android:inputType="number" android:text="65536" android:maxLength="9" android:importantForAutofill="no" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:labelFor="@id/contact_seconds" android:text="@string/ble_contact_seconds" />
+        <EditText android:id="@+id/contact_seconds" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:minHeight="48dp" android:inputType="number" android:text="45" android:maxLength="2" android:importantForAutofill="no" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:labelFor="@id/user_id" android:text="@string/ble_test_id" />
         <EditText android:id="@+id/user_id" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:minHeight="48dp" android:inputType="number" android:text="1" android:maxLength="8"

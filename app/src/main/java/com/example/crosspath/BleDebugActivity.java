@@ -33,7 +33,9 @@ public class BleDebugActivity extends AppCompatActivity {
             Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT};
     private final ScheduledExecutorService protocolExecutor = Executors.newSingleThreadScheduledExecutor();
     private BleTransport transport;
-    private FullSyncCoordinator exchange;
+    private SyncExchange exchange;
+    private Runnable encounterClosed = () -> {};
+    private java.util.function.LongConsumer peerDiscovered = token -> {};
     private SafetyRepository repository;
     private long requestGeneration;
     private java.util.concurrent.ScheduledFuture<?> expiryTimer;
@@ -52,7 +54,8 @@ public class BleDebugActivity extends AppCompatActivity {
     };
     private MunicipalityMaster master;
     private TextView status;
-    private Spinner role, municipality;
+    private Spinner role, municipality, syncMode;
+    private EditText byteBudget, contactSeconds;
     private EditText userId;
     private CheckBox mtu23, pauseAck;
     private boolean visible;
@@ -73,6 +76,8 @@ public class BleDebugActivity extends AppCompatActivity {
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         if (!BuildConfig.DEBUG) { finish(); return; }
+        ((CrosspathApplication) getApplication()).bleDebugActive = true;
+        stopService(new Intent(this, com.example.crosspath.service.RelayForegroundService.class));
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_ble_debug);
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
@@ -82,6 +87,11 @@ public class BleDebugActivity extends AppCompatActivity {
         status = findViewById(R.id.status);
         role = findViewById(R.id.role); municipality = findViewById(R.id.municipality);
         userId = findViewById(R.id.user_id); mtu23 = findViewById(R.id.mtu23);
+        syncMode = findViewById(R.id.sync_mode);
+        syncMode.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"FULL（従来の全件交換）", "FLAT（SUMMARY・ID一覧）", "HIERARCHICAL（階層同期）"}));
+        syncMode.setSelection(2);
+        byteBudget = findViewById(R.id.byte_budget); contactSeconds = findViewById(R.id.contact_seconds);
         pauseAck = findViewById(R.id.pause_ack);
         pauseAck.setVisibility(BuildConfig.DEBUG ? android.view.View.VISIBLE : android.view.View.GONE);
         master = KyushuMunicipalities.load();
@@ -93,10 +103,15 @@ public class BleDebugActivity extends AppCompatActivity {
         for (int i = 1; i <= 233; i++) locations.add(master.requireName(i));
         municipality.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, locations));
         transport = new BleTransport(this, protocolExecutor, new BleTransport.Listener() {
+            @Override public void onPeerIdentified(long token) { peerDiscovered.accept(token); }
             @Override public void onStatus(String text) { show(text); }
             @Override public void onReady(boolean client, long token) { if (exchange != null) exchange.ready(client, token); }
             @Override public void onMessage(MessageAssembler.Message message) { if (exchange != null) exchange.receive(message); }
-            @Override public void onDisconnected() { if (exchange != null) { exchange.stop(); exchange = null; } }
+            @Override public void onDisconnected() {
+                encounterClosed.run(); encounterClosed = () -> {};
+                peerDiscovered = token -> {};
+                if (exchange != null) { exchange.stop(); exchange = null; }
+            }
         }, communicationGate::allowsCommunication);
         ContextCompat.registerReceiver(this, bluetoothState, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
                 ContextCompat.RECEIVER_EXPORTED);
@@ -129,6 +144,13 @@ public class BleDebugActivity extends AppCompatActivity {
             BleTransport.Role selected = BleTransport.Role.values()[role.getSelectedItemPosition()];
             boolean small = mtu23.isChecked();
             boolean holdAck = BuildConfig.DEBUG && pauseAck.isChecked();
+            int selectedMode = syncMode.getSelectedItemPosition() + 1;
+            final long budget, seconds;
+            try {
+                budget = Long.parseLong(byteBudget.getText().toString());
+                seconds = Long.parseLong(contactSeconds.getText().toString());
+                if (budget < 1024 || budget > 100_000_000 || seconds < 1 || seconds > 45) throw new IllegalArgumentException();
+            } catch (IllegalArgumentException invalid) { show("予算は1024〜100000000B、接触時間は1〜45秒で指定してください"); return; }
             protocolExecutor.execute(() -> {
                 stopTransport();
                 long generation = requestGeneration;
@@ -144,18 +166,53 @@ public class BleDebugActivity extends AppCompatActivity {
                     int start = session.sessionId.equals(prefs.getString("session", ""))
                             ? prefs.getInt("after", 0) : Math.max(0, random.nextInt(16384) * 1024 - 1);
                     prefs.edit().putString("session", session.sessionId).putInt("after", start).apply();
+                    EncounterPolicy policy = ((CrosspathApplication) getApplication()).encounters;
+                    long localToken = policy.begin(session.sessionId);
+                    long[] nextNotice = {0}, peerToken = {0}; boolean[] peerKnown = {false};
+                    transport.configureEncounter(selectedMode == Protocol.FULL ? null : localToken, peer -> {
+                        if (selectedMode == Protocol.FULL) return true;
+                        long now = android.os.SystemClock.elapsedRealtime();
+                        long delay = policy.delay(peer, session.dataRevision, now);
+                        if (delay > 0 && now >= nextNotice[0]) {
+                            nextNotice[0] = now + 5000; show("再接続抑制中（残り約" + ((delay + 999) / 1000) + "秒）");
+                        }
+                        return delay == 0;
+                    });
                     transport.start(selected, small);
+                    peerDiscovered = token -> { peerToken[0] = token; peerKnown[0] = true; };
                     communicationSession = session.sessionId;
-                    exchange = new FullSyncCoordinator(new FullSyncCoordinator.Link() {
+                    DeltaSyncCoordinator.Link link = new DeltaSyncCoordinator.Link() {
+                        @Override public int mtu() { return transport.negotiatedMtu(); }
+                        @Override public long issuedTxBytes() { return transport.issuedTxBytes(); }
+                        @Override public long receivedRxBytes() { return transport.receivedRxBytes(); }
                         @Override public void send(int type, byte[] body, Runnable done) { transport.send(type, body, done); }
-                        @Override public boolean matchesToken(long token) { return transport.matchesPeerToken(token); }
+                        @Override public boolean matchesToken(long token) {
+                            boolean accepted = transport.matchesPeerToken(token);
+                            if (accepted) { peerToken[0] = token; peerKnown[0] = true; }
+                            return accepted;
+                        }
                         @Override public void status(String text) { show(text); }
                         @Override public void close(String reason) {
                             if (reason.startsWith("双方向FULL交換完了")) prefs.edit().clear().apply();
                             transport.abort(reason);
                         }
-                    }, new RoomSyncStore(repository, session.sessionId), master, protocolExecutor, start,
-                            random.nextInt(), after -> prefs.edit().putString("session", session.sessionId).putInt("after", after).apply());
+                    };
+                    RoomSyncStore store = new RoomSyncStore(repository, session.sessionId);
+                    if (selectedMode == Protocol.FULL) {
+                        exchange = new FullSyncCoordinator(link, store, master, protocolExecutor, start,
+                                random.nextInt(), after -> prefs.edit().putString("session", session.sessionId).putInt("after", after).apply());
+                    } else {
+                        DeltaSyncCoordinator delta = new DeltaSyncCoordinator(link, store, master, protocolExecutor,
+                                selectedMode, random.nextInt(), budget, seconds * 1000);
+                        exchange = delta;
+                        encounterClosed = () -> {
+                            if (!peerKnown[0]) return;
+                            long revision = delta.comparedRevision() < 0 ? session.dataRevision : delta.comparedRevision();
+                            policy.record(peerToken[0], revision, delta.comparisonDigest(), delta.verifiedComplete(), android.os.SystemClock.elapsedRealtime());
+                            policy.convergence(peerToken[0], delta.verifiedComplete(), delta.verifiedEqual(), delta.newReceived());
+                            show("差分なし接触=" + policy.consecutiveEmpty() + "回（K未設定・推定収束は無効）");
+                        };
+                    }
                     exchange.pauseAckAfterCommitForDebug(holdAck);
                     expiryTimer = protocolExecutor.schedule(() -> {
                         stopTransport(); show("通信期間が終了しました");
@@ -212,13 +269,21 @@ public class BleDebugActivity extends AppCompatActivity {
             status.setText(old + "\n" + text);
         });
     }
-    @Override protected void onStart() { super.onStart(); visible = true; if (repository != null) refreshRegistration(); }
+    @Override protected void onStart() {
+        super.onStart(); visible = true;
+        ((CrosspathApplication) getApplication()).bleDebugActive = true;
+        stopService(new Intent(this, com.example.crosspath.service.RelayForegroundService.class));
+        if (repository != null) refreshRegistration();
+    }
     @Override protected void onStop() {
         visible = false;
+        communicationGate.close();
+        ((CrosspathApplication) getApplication()).bleDebugActive = false;
         protocolExecutor.execute(() -> { stopTransport(); if (status != null) show("画面を離れたため検証通信を停止しました"); });
         super.onStop();
     }
     @Override protected void onDestroy() {
+        ((CrosspathApplication) getApplication()).bleDebugActive = false;
         ((CrosspathApplication) getApplication()).sessionStops.remove(sessionStop);
         if (transport != null) unregisterReceiver(bluetoothState);
         protocolExecutor.shutdown();

@@ -426,4 +426,53 @@ public class SafetyRepositoryTest {
         assertEquals(1, db.safetyDao().count());
         assertEquals(1, db.safetyDao().session().dataRevision);
     }
+
+    @Test public void hierarchicalCountsAndBitmapsFreezeRevisionAndResetAtNewPeriod() throws Exception {
+        await(repository.receive(session, master.version, 1023, 20));
+        await(repository.receive(session, master.version, 1024, 20));
+        await(repository.receive(session, master.version, 0xFFFFFF, 20));
+        com.example.crosspath.sync.DeltaSyncStore.Summary first = await(repository.syncSummary(session));
+        assertEquals(2, first.counts[0]); assertEquals(1, first.counts[1]); assertEquals(1, first.counts[16383]);
+        assertEquals(4, first.snapshot.count);
+        byte[] digest = await(repository.idDigest(first.snapshot));
+        await(repository.receive(session, master.version, 2, 30));
+        com.example.crosspath.sync.DeltaSyncStore.Summary next = await(repository.syncSummary(session));
+        assertEquals(3, next.counts[0]); assertEquals(2, first.counts[0]);
+        byte[] bitmap = await(repository.syncBitmap(first.snapshot, 0));
+        assertEquals(2, com.example.crosspath.protocol.HierarchyCodec.readBitmap(bitmap, 0, 2).cardinality());
+        assertArrayEquals(digest, await(repository.idDigest(first.snapshot)));
+        assertFalse(Arrays.equals(digest, await(repository.idDigest(next.snapshot))));
+        assertEquals(2, await(repository.syncRecords(first.snapshot, new int[]{1, 1023})).size());
+        assertThrows(java.util.concurrent.ExecutionException.class,
+                () -> await(repository.syncRecords(first.snapshot, new int[]{2})));
+        now.set(db.safetyDao().session().endsAtWall);
+        String newSession = await(repository.startSession(3, 20));
+        assertEquals(1, await(repository.syncSummary(newSession)).snapshot.count);
+        assertThrows(java.util.concurrent.ExecutionException.class, () -> await(repository.syncBitmap(first.snapshot, 0)));
+        assertThrows(java.util.concurrent.ExecutionException.class, () -> await(repository.idDigest(first.snapshot)));
+    }
+
+    @Test public void cachedCountsSurviveRollbackAndDoNotGrowOnDuplicate() throws Exception {
+        await(repository.syncSummary(session));
+        db.getOpenHelper().getWritableDatabase().execSQL("CREATE TRIGGER fail_revision BEFORE UPDATE ON ActiveSession BEGIN SELECT RAISE(ABORT, 'injected'); END");
+        // Room uses INSERT OR REPLACE for session updates; inject on record insertion as well.
+        db.getOpenHelper().getWritableDatabase().execSQL("CREATE TRIGGER fail_person BEFORE INSERT ON SafetyRecord WHEN NEW.userId = 2 BEGIN SELECT RAISE(ABORT, 'injected'); END");
+        assertThrows(java.util.concurrent.ExecutionException.class, () -> await(repository.receive(session, master.version, 2, 20)));
+        db.getOpenHelper().getWritableDatabase().execSQL("DROP TRIGGER fail_person");
+        db.getOpenHelper().getWritableDatabase().execSQL("DROP TRIGGER fail_revision");
+        assertEquals(1, await(repository.syncSummary(session)).snapshot.count);
+        await(repository.receive(session, master.version, 2, 20));
+        await(repository.receive(session, master.version, 2, 30));
+        assertEquals(2, await(repository.syncSummary(session)).snapshot.count);
+        repository = new SafetyRepository(db, executor, now::get, SafetyRepository.MAX_RECORDS, master);
+        assertEquals(2, await(repository.syncSummary(session)).snapshot.count);
+    }
+
+    @Test public void cancelledBatchDoesNotPolluteWarmCounts() throws Exception {
+        await(repository.syncSummary(session));
+        java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        assertThrows(java.util.concurrent.ExecutionException.class, () -> await(repository.applyReceivedBatch(session, master.version,
+                Arrays.asList(new WireRecord(2, 20)), () -> calls.incrementAndGet() == 1)));
+        assertEquals(1, await(repository.syncSummary(session)).snapshot.count);
+    }
 }

@@ -10,6 +10,11 @@ import java.util.concurrent.Executor;
 import java.util.function.LongSupplier;
 import java.util.function.BooleanSupplier;
 import com.example.crosspath.sync.SyncStore;
+import com.example.crosspath.sync.DeltaSyncStore;
+import com.example.crosspath.protocol.HierarchyCodec;
+import java.util.Arrays;
+import java.util.BitSet;
+import java.security.MessageDigest;
 import java.util.function.Function;
 import java.util.concurrent.Callable;
 
@@ -29,6 +34,19 @@ public final class SafetyRepository {
     private final SessionStopHandler stopHandler;
     private final long capacity;
     private final MunicipalityMaster municipalities;
+    // Access under Room's transaction lock; a revision mismatch rebuilds after rollback or another writer.
+    private String countSession;
+    private long countRevision = -1;
+    private int[] cachedCounts;
+    private volatile DigestCache digestCache;
+    private String bitmapSession;
+    private final java.util.Map<String, byte[]> bitmaps = new java.util.LinkedHashMap<String, byte[]>(128, 0.75f, true) {
+        @Override protected boolean removeEldestEntry(java.util.Map.Entry<String, byte[]> entry) { return size() > 128; }
+    };
+    private static final class DigestCache {
+        final String session; final long revision, count; final byte[] digest;
+        DigestCache(SyncStore.Snapshot s, byte[] digest) { session = s.sessionId; revision = s.revision; count = s.count; this.digest = digest.clone(); }
+    }
 
     public enum Outcome { NEW_PERSON, DUPLICATE, ID_ALREADY_KNOWN, CAPACITY_REJECTED }
 
@@ -135,6 +153,7 @@ public final class SafetyRepository {
             dao.saveSession(session);
             dao.insert(new SafetyRecord(self.userId, self.municipalityCode, confirmedAt,
                     "SELF", session.sessionId, 1));
+            resetSyncCaches();
             requireSession(session.sessionId);
             return session.sessionId;
         }), executor));
@@ -168,7 +187,8 @@ public final class SafetyRepository {
             SafetyDao dao = db.safetyDao();
             ActiveSession session = requireSession(localSessionId);
             long now = clock.read().wall;
-            long count = dao.count();
+            int[] counts = countsFor(session).clone();
+            long count = Arrays.stream(counts).asLongStream().sum();
             int inserted = 0;
             long revision = session.dataRevision + 1;
             List<Outcome> outcomes = new ArrayList<>(copy.size());
@@ -201,6 +221,7 @@ public final class SafetyRepository {
                         notifications.add(new NotificationRequest(historyId, history));
                     }
                     count++;
+                    counts[record.userId >>> 10]++;
                     inserted++;
                     outcomes.add(Outcome.NEW_PERSON);
                 }
@@ -213,6 +234,7 @@ public final class SafetyRepository {
             // Check after ALL writes too: expiry during receipt rolls back the whole batch.
             requireSession(localSessionId);
             if (!connectionActive.getAsBoolean()) throw new IllegalStateException("Stale connection");
+            cachedCounts = counts; countSession = session.sessionId; countRevision = session.dataRevision;
             return new BatchResult(outcomes, inserted, notifications);
         });
     }
@@ -238,10 +260,103 @@ public final class SafetyRepository {
     public CompletableFuture<SyncStore.Snapshot> snapshot(String sessionId) {
         return transaction(sessionId, () -> {
             ActiveSession session = requireSession(sessionId);
-            long count = db.safetyDao().count();
+            long count = Arrays.stream(countsFor(session)).asLongStream().sum();
             requireSession(sessionId);
             return new SyncStore.Snapshot(session.sessionId, session.dataRevision, count, session.endsAtWall);
         });
+    }
+
+    private int[] countsFor(ActiveSession session) {
+        if (cachedCounts == null || !session.sessionId.equals(countSession) || countRevision != session.dataRevision) {
+            int[] counts = new int[HierarchyCodec.BLOCKS];
+            for (SafetyDao.BlockCount row : db.safetyDao().blockCounts(session.sessionId)) {
+                HierarchyCodec.check(row.count >= 0 && row.count <= HierarchyCodec.capacity(row.blockId));
+                counts[row.blockId] = row.count;
+            }
+            cachedCounts = counts; countSession = session.sessionId; countRevision = session.dataRevision;
+        }
+        return cachedCounts;
+    }
+    private void resetSyncCaches() {
+        cachedCounts = null; countSession = null; countRevision = -1; digestCache = null;
+        bitmaps.clear(); bitmapSession = null;
+    }
+
+    public CompletableFuture<DeltaSyncStore.Summary> syncSummary(String sessionId) {
+        return transaction(sessionId, () -> {
+            ActiveSession session = requireSession(sessionId);
+            int[] counts = countsFor(session);
+            SyncStore.Snapshot snapshot = new SyncStore.Snapshot(sessionId, session.dataRevision,
+                    Arrays.stream(counts).asLongStream().sum(), session.endsAtWall);
+            requireSession(sessionId);
+            return new DeltaSyncStore.Summary(snapshot, counts);
+        });
+    }
+
+    public CompletableFuture<byte[]> syncBitmap(SyncStore.Snapshot snapshot, int block) {
+        HierarchyCodec.capacity(block);
+        return transaction(snapshot.sessionId, () -> {
+            ActiveSession session = requireSession(snapshot.sessionId);
+            if (snapshot.revision > session.dataRevision) throw new IllegalStateException("Invalid revision");
+            if (!snapshot.sessionId.equals(bitmapSession)) { bitmaps.clear(); bitmapSession = snapshot.sessionId; }
+            String key = snapshot.revision + ":" + block;
+            byte[] cached = bitmaps.get(key);
+            if (cached != null) return cached.clone();
+            BitSet bits = new BitSet(1024); byte[] bitmap = new byte[128];
+            for (int id : db.safetyDao().blockIds(snapshot.sessionId, snapshot.revision, block * 1024, block * 1024 + 1023)) {
+                if (id == 0) throw new IllegalStateException("Reserved ID");
+                bits.set(id & 1023);
+            }
+            for (int offset = bits.nextSetBit(0); offset >= 0; offset = bits.nextSetBit(offset + 1))
+                bitmap[offset / 8] |= (byte) (128 >>> (offset % 8));
+            requireSession(snapshot.sessionId); bitmaps.put(key, bitmap.clone()); return bitmap;
+        });
+    }
+
+    public CompletableFuture<List<WireRecord>> syncRecords(SyncStore.Snapshot snapshot, int[] ids) {
+        if (ids.length < 1 || ids.length > MAX_BATCH_SIZE) throw new IllegalArgumentException("Requested ID count");
+        int[] copy = ids.clone();
+        for (int i = 0; i < copy.length; i++) {
+            WireRecord.requireUserId(copy[i]);
+            if (i > 0 && copy[i] <= copy[i - 1]) throw new IllegalArgumentException("ID order");
+        }
+        return transaction(snapshot.sessionId, () -> {
+            ActiveSession session = requireSession(snapshot.sessionId);
+            if (snapshot.revision > session.dataRevision) throw new IllegalStateException("Invalid revision");
+            List<WireRecord> records = db.safetyDao().requestedRecords(snapshot.sessionId, snapshot.revision, copy);
+            if (records.size() != copy.length) throw new IllegalStateException("Requested ID missing from snapshot");
+            requireSession(snapshot.sessionId); return records;
+        });
+    }
+
+    /** Stream at most 256 objects per short transaction; cached by immutable period/revision. */
+    public CompletableFuture<byte[]> idDigest(SyncStore.Snapshot snapshot) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                db.runInTransaction(() -> {
+                    ActiveSession session = requireSession(snapshot.sessionId);
+                    if (snapshot.revision < 0 || snapshot.revision > session.dataRevision
+                            || snapshot.count < 0 || snapshot.count > MAX_RECORDS) throw new IllegalArgumentException("Invalid snapshot");
+                });
+                DigestCache cached = digestCache;
+                if (cached != null && cached.session.equals(snapshot.sessionId) && cached.revision == snapshot.revision && cached.count == snapshot.count)
+                    return cached.digest.clone();
+                MessageDigest digest = HierarchyCodec.digest(snapshot.count);
+                int after = 0; long count = 0;
+                while (true) {
+                    final int last = after;
+                    List<WireRecord> page = db.runInTransaction(() -> {
+                        requireSession(snapshot.sessionId);
+                        List<WireRecord> rows = db.safetyDao().snapshotPage(snapshot.sessionId, snapshot.revision, last, 0xFFFFFF, 256);
+                        requireSession(snapshot.sessionId); return rows;
+                    });
+                    if (page.isEmpty()) break;
+                    for (WireRecord row : page) { HierarchyCodec.digestId(digest, row.userId); after = row.userId; count++; }
+                }
+                if (count != snapshot.count) throw new IllegalStateException("Snapshot digest count");
+                byte[] result = digest.digest(); digestCache = new DigestCache(snapshot, result); return result;
+            } catch (RuntimeException error) { stopAfterFailure(snapshot.sessionId, error); throw error; }
+        }, executor);
     }
 
     public CompletableFuture<List<WireRecord>> snapshotPage(SyncStore.Snapshot snapshot,
@@ -308,6 +423,7 @@ public final class SafetyRepository {
             throw new IllegalStateException("Session changed during expiry transaction");
         }
         dao.deleteSessionRecords(expectedSessionId);
+        resetSyncCaches();
         return EndResult.ENDED;
     }
 
@@ -341,6 +457,7 @@ public final class SafetyRepository {
                 throw new IllegalStateException("Session changed during expiry transaction");
             }
             db.safetyDao().deleteSessionRecords(session.sessionId);
+            resetSyncCaches();
             status = SessionStatus.evaluate(db.safetyDao().session(), time.anchor.wall, time.trusted);
         }
         db.safetyDao().deleteExpiredHistories(time.anchor.wall);

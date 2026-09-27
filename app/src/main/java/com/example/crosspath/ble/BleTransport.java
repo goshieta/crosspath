@@ -25,6 +25,7 @@ import java.util.function.BooleanSupplier;
 public final class BleTransport {
     public enum Role { CLIENT, SERVER, AUTO }
     public interface Listener {
+        default void onPeerIdentified(long token) { }
         void onStatus(String status);
         void onReady(boolean client, long localToken);
         void onMessage(MessageAssembler.Message message);
@@ -51,6 +52,16 @@ public final class BleTransport {
     private long epoch, peerToken, expectedToken;
     private int mtu = 23, messageId;
     private Role role;
+    private java.util.function.LongPredicate acceptPeer = token -> true;
+    private Long sessionToken;
+    private long issuedTxBytes, receivedRxBytes;
+
+    public void configureEncounter(Long token, java.util.function.LongPredicate acceptPeer) {
+        this.sessionToken = token; this.acceptPeer = acceptPeer;
+    }
+    public int negotiatedMtu() { return mtu; }
+    public long issuedTxBytes() { return issuedTxBytes; }
+    public long receivedRxBytes() { return receivedRxBytes; }
 
     public BleTransport(Context context, ScheduledExecutorService executor, Listener listener) {
         this(context, executor, listener, () -> true);
@@ -63,6 +74,7 @@ public final class BleTransport {
     }
     public void start(Role role, boolean force23) {
         stop();
+        issuedTxBytes = receivedRxBytes = 0;
         if (!checkGate()) return;
         this.role = role; this.force23 = force23;
         try {
@@ -75,7 +87,7 @@ public final class BleTransport {
             if (!adapter.isEnabled()) { listener.onStatus("BluetoothをONにして開始してください"); return; }
             advertiser = adapter.getBluetoothLeAdvertiser(); scanner = adapter.getBluetoothLeScanner();
             if (advertiser == null || scanner == null) { listener.onStatus("BLE機能を利用できません"); return; }
-            running = true; peerToken = random.nextLong();
+            running = true; peerToken = sessionToken == null ? random.nextLong() : sessionToken;
             openServer();
         } catch (SecurityException error) { abort("付近のデバイス権限が必要です"); }
     }
@@ -147,13 +159,16 @@ public final class BleTransport {
         if (data == null || data.length != 9 || (data[0] & 255) != Protocol.MAJOR) return;
         long token = ByteBuffer.wrap(data, 1, 8).getLong();
         if (token == peerToken) { restartWithNewToken(); return; }
+        if (!acceptPeer.test(token)) return;
         if (role == Role.AUTO && Long.compareUnsigned(peerToken, token) > 0) return;
         expectedToken = token;
+        listener.onPeerIdentified(token);
         claim(result.getDevice(), true);
         client = peer.connectGatt(context, false, clientCallback(epoch), BluetoothDevice.TRANSPORT_LE);
         if (client == null) abort("接続開始失敗");
     }
     private void claim(BluetoothDevice device, boolean asClient) {
+        trace("CONNECT client=" + asClient);
         peer = device; initiating = asClient;
         stopDiscovery();
         long generation = epoch;
@@ -292,34 +307,49 @@ public final class BleTransport {
     /** Called on the protocol executor after decoding HELLO, before accepting DATA. */
     public boolean matchesPeerToken(long token) {
         if (token == peerToken) { peerToken = random.nextLong(); return false; }
+        // Suppress our outgoing attempts; an incoming peer may have newly received information.
+        if (initiating && !acceptPeer.test(token)) return false;
         return initiating ? token == expectedToken : role != Role.AUTO || Long.compareUnsigned(token, peerToken) < 0;
     }
     private void receive(byte[] frame) {
         if (!ready) { abort("初期化前の受信"); return; }
+        receivedRxBytes += frame.length + 4L;
         MessageAssembler.Message message = assembler.accept(frame, mtu);
-        if (message != null) listener.onMessage(message);
+        if (message != null) {
+            trace("RX complete type=" + message.type + " mtu=" + mtu + " rx=" + receivedRxBytes);
+            listener.onMessage(message);
+        }
     }
     /** Completion means only GATT delivery. It is NEVER a database-save ACK. */
     public void send(int type, byte[] body, Runnable delivered) {
         if (!checkGate()) return;
         if (!ready) throw new IllegalStateException("Not connected");
         List<byte[]> frames = FrameCodec.fragment(type, messageId++ & 65535, body, mtu);
+        trace("TX queued type=" + type + " frames=" + frames.size() + " mtu=" + mtu);
         long generation = epoch;
         for (int i = 0; i < frames.size(); i++) {
             if (!running || epoch != generation) return;
             byte[] frame = frames.get(i);
-            Runnable complete = i == frames.size() - 1 ? delivered : () -> { };
+            Runnable complete = i == frames.size() - 1 ? () -> {
+                trace("TX complete type=" + type + " tx=" + issuedTxBytes);
+                delivered.run();
+            } : () -> { };
             if (initiating) operations.add("write", () -> {
                 if (!checkGate()) return false;
-                if (Build.VERSION.SDK_INT >= 33) return client.writeCharacteristic(rx, frame,
+                boolean accepted;
+                if (Build.VERSION.SDK_INT >= 33) accepted = client.writeCharacteristic(rx, frame,
                         BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS;
-                rx.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT); rx.setValue(frame);
-                return client.writeCharacteristic(rx);
+                else { rx.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT); rx.setValue(frame); accepted = client.writeCharacteristic(rx); }
+                if (accepted) issuedTxBytes += frame.length + 4L;
+                return accepted;
             }, complete);
             else operations.add("indicate", () -> {
                 if (!checkGate()) return false;
-                if (Build.VERSION.SDK_INT >= 33) return server.notifyCharacteristicChanged(peer, tx, true, frame) == BluetoothStatusCodes.SUCCESS;
-                tx.setValue(frame); return server.notifyCharacteristicChanged(peer, tx, true);
+                boolean accepted;
+                if (Build.VERSION.SDK_INT >= 33) accepted = server.notifyCharacteristicChanged(peer, tx, true, frame) == BluetoothStatusCodes.SUCCESS;
+                else { tx.setValue(frame); accepted = server.notifyCharacteristicChanged(peer, tx, true); }
+                if (accepted) issuedTxBytes += frame.length + 4L;
+                return accepted;
             }, complete);
         }
     }
@@ -355,7 +385,13 @@ public final class BleTransport {
         peer = null; ready = subscribed = initiating = false; mtu = 23; messageId = 0;
         listener.onDisconnected();
     }
-    public void abort(String reason) { stop(); listener.onStatus(reason + "（開始ボタンで再試行）"); }
+    public void abort(String reason) {
+        trace("END reason=" + reason + " mtu=" + mtu + " tx=" + issuedTxBytes + " rx=" + receivedRxBytes);
+        stop(); listener.onStatus(reason + "（開始ボタンで再試行）");
+    }
+    private static void trace(String text) {
+        if (com.example.crosspath.BuildConfig.DEBUG) android.util.Log.d("CrosspathBle", text);
+    }
     private boolean checkGate() {
         if (communicationAllowed.getAsBoolean()) return true;
         abort("通信期間が終了、または時計の確認が必要です");

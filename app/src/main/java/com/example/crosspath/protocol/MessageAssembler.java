@@ -7,7 +7,8 @@ public final class MessageAssembler {
     public static final class Message {
         public final int type, id;
         public final byte[] body;
-        Message(int type, int id, byte[] body) { this.type = type; this.id = id; this.body = body; }
+        public final long attBytes;
+        Message(int type, int id, byte[] body, long attBytes) { this.type = type; this.id = id; this.body = body; this.attBytes = attBytes; }
     }
     private byte[] body;
     private int type, id, count, next, written, chunkSize;
@@ -34,7 +35,7 @@ public final class MessageAssembler {
             if (next != count) return null;
             if (written != body.length) fail();
             FrameCodec.verifiedContent(body);
-            Message result = new Message(type, id, body);
+            Message result = new Message(type, id, body, body.length + 14L * count);
             reset();
             return result;
         } catch (RuntimeException error) { reset(); throw error; }

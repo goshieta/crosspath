@@ -50,6 +50,8 @@ public class Sc06NotificationHistoryFragment extends Fragment {
 
         safetyList = view.findViewById(R.id.sc06_safety_list);
         noSessionText = view.findViewById(R.id.sc06_no_session_text);
+        ((com.example.crosspath.CrosspathApplication) requireActivity().getApplication())
+                .relayDataChanges.observe(getViewLifecycleOwner(), value -> loadWatchStatuses());
 
         safetyList.setLayoutManager(new LinearLayoutManager(requireContext()));
         safetyList.setItemAnimator(new DefaultItemAnimator());
