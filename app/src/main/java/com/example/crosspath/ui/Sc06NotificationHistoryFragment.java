@@ -32,6 +32,13 @@ public class Sc06NotificationHistoryFragment extends Fragment {
 
     private RecyclerView safetyList;
     private TextView noSessionText;
+    private final NotificationPermissionControl notificationControl = new NotificationPermissionControl(this);
+    private final java.util.function.Consumer<com.example.crosspath.data.SessionStatus> periodListener = status -> {
+        if (getView() == null || !isResumed()) return;
+        loadWatchStatuses();
+        notificationControl.refresh();
+    };
+
 
     @Nullable
     @Override
@@ -58,14 +65,22 @@ public class Sc06NotificationHistoryFragment extends Fragment {
             ((MainActivity) getActivity()).applyScreenTheme(Screen.SC06);
         }
 
+        notificationControl.attach((ViewGroup) view);
         loadWatchStatuses();
     }
 
     @Override
     public void onResume() {
         super.onResume();
+        UiData.addListener(periodListener);
+        notificationControl.refresh();
         // 復帰時に最新データを取り直す
         loadWatchStatuses();
+    }
+
+    @Override public void onPause() {
+        UiData.removeListener(periodListener);
+        super.onPause();
     }
 
     /** 受信状態一覧を UiData 経由で読み込み、表示する。表示のたびに checkSession を先に呼ぶ。 */
@@ -76,8 +91,7 @@ public class Sc06NotificationHistoryFragment extends Fragment {
                 ((MainActivity) getActivity()).onSessionStatus(status);
             }
         }, error -> {});
-        UiData.whenReady(repo ->
-            UiData.onResult(repo.currentWatchStatuses(), statuses -> {
+        UiData.onResult(UiData.execute(repo -> repo.currentWatchStatuses()), statuses -> {
                 if (!isAdded() || getView() == null) return;
                 if (statuses == null || statuses.isEmpty()) {
                     // 通知対象者が未登録
@@ -88,7 +102,8 @@ public class Sc06NotificationHistoryFragment extends Fragment {
                     // 全要素 NO_ACTIVE_SESSION → 現在の通信期間なし
                     noSessionText.setText(R.string.state_no_session);
                     noSessionText.setVisibility(View.VISIBLE);
-                    safetyList.setVisibility(View.GONE);
+                    safetyList.setAdapter(new SafetyStatusAdapter(statuses));
+                    safetyList.setVisibility(View.VISIBLE);
                 } else {
                     noSessionText.setVisibility(View.GONE);
                     SafetyStatusAdapter adapter = new SafetyStatusAdapter(statuses);
@@ -97,11 +112,10 @@ public class Sc06NotificationHistoryFragment extends Fragment {
                 }
             }, error -> {
                 if (!isAdded() || getView() == null) return;
-                noSessionText.setText(R.string.state_no_session);
+                noSessionText.setText("受信状態を読み込めません。画面を開き直して再試行してください");
                 noSessionText.setVisibility(View.VISIBLE);
                 safetyList.setVisibility(View.GONE);
-            })
-        );
+            });
     }
 
     private static boolean allNoActiveSession(List<WatchStatus> statuses) {

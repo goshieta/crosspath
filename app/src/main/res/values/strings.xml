@@ -71,4 +71,5 @@
     <!-- %1$s は対象者名、%2$s は受信状態の説明 -->
     <string name="item_safety_row_desc">%1$s、%2$s</string>
     <string name="status_not_received_desc">今回の期間では未受信</string>
+    <string name="notification_delivery_counts">今回の通知：発行済み %1$d・待機 %2$d・権限不足 %3$d</string>
 </resources>

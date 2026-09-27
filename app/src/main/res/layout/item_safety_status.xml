@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -20,7 +21,7 @@
         android:layout_marginEnd="@dimen/element_margin_small"
         android:contentDescription="@null"
         android:src="@drawable/ic_person_24"
-        android:tint="?attr/colorOnSurfaceVariant" />
+        app:tint="?attr/colorOnSurfaceVariant" />
 
     <!-- 対象者名（長い場合は折り返し、右の状態表示を隠さない） 仕様 §11.12 -->
     <TextView

@@ -19,7 +19,7 @@
         android:layout_marginEnd="@dimen/element_margin_small"
         android:contentDescription="@null"
         android:src="@drawable/ic_person_24"
-        android:tint="?attr/colorOnSurfaceVariant" />
+        app:tint="?attr/colorOnSurfaceVariant" />
 
     <!-- ID表示 -->
     <TextView

@@ -5,8 +5,12 @@ import java.util.UUID;
 /**
  * 登録処理を統括するリポジトリ。仕様: crosspath-registration-spec.md §3.8
  *
- * 初期登録・冪等性・リトライ・競合復旧を含めて1メソッドで提供する。
- * IOスレッドで呼ばれる前提。
+ * 初期登録・冪等性・リトライ・競合復旧を含めて提供する。IOスレッドで呼ばれる前提。
+ *
+ * request_id の扱い:
+ *  - アプリ経路（SC01 → UserProfile → RegistrationGateway）では、呼び出し側が通信前に
+ *    request_id を永続化し {@link #registerWithRequestId(String, String)} に渡す。
+ *  - {@link #register(String)} は request_id を内製する互換入口（単体テスト・単発利用）。
  */
 public final class RegistrationRepository {
     private final RegistrationHttp http;
@@ -18,13 +22,19 @@ public final class RegistrationRepository {
     }
 
     /**
-     * 初回登録を実行する。登録済みの場合は保存済みの user_id を返す。
+     * 呼び出し側が保存済みの request_id を渡して初回登録を実行する。
+     * 登録済みの場合は保存済みの user_id を返す。
      *
-     * @param name 表示名（null 不可）
+     * @param requestId 冪等キー（通信前に永続化済みの値）
+     * @param name      表示名（null 不可）
      * @return サーバー採番の user_id（1〜16,777,215）
      * @throws RegistrationException 登録失敗時
      */
-    public int register(String name) throws RegistrationException {
+    public int registerWithRequestId(String requestId, String name) throws RegistrationException {
+        if (requestId == null || requestId.isEmpty()) {
+            throw new IllegalArgumentException("requestId は必須です");
+        }
+
         // 1. 既に登録済みなら保存値を返す
         int existingUserId = store.userId();
         if (existingUserId > 0) {
@@ -43,14 +53,7 @@ public final class RegistrationRepository {
             }
         }
 
-        // 3. request_id が無ければ生成して事前保存（リトライで使い回す）
-        String requestId = store.requestId();
-        if (requestId == null) {
-            requestId = UUID.randomUUID().toString();
-            store.saveRequestId(requestId);
-        }
-
-        // 4-7. リトライループ
+        // 3-6. リトライループ
         RegistrationError lastError = RegistrationError.NETWORK;
         String lastTraceId = null;
 
@@ -130,5 +133,22 @@ public final class RegistrationRepository {
         // 全リトライ失敗
         throw new RegistrationException(lastError,
                 "全リトライが失敗しました", lastTraceId);
+    }
+
+    /**
+     * request_id を内製して登録する互換入口。
+     * request_id が未保存なら生成して通信前に保存する（{@link RegistrationStore} が保持する）。
+     *
+     * @param name 表示名（null 不可）
+     * @return サーバー採番の user_id（1〜16,777,215）
+     * @throws RegistrationException 登録失敗時
+     */
+    public int register(String name) throws RegistrationException {
+        String requestId = store.requestId();
+        if (requestId == null) {
+            requestId = UUID.randomUUID().toString();
+            store.saveRequestId(requestId);
+        }
+        return registerWithRequestId(requestId, name);
     }
 }

@@ -77,8 +77,8 @@ RepositoryのFuture完了をハンドラー内で待つとデッドロックし�
    成功完了でもCAPACITY_REJECTEDを保存成功にしない。
 6. SC04／SC06表示前はcheckAndEndExpiredSessionを呼び、続けてcurrentWatchStatuses／
    validHistoriesを取得する。これらの表示API自体にも同じ前処理があり、接続忘れを防ぐ。
-7. 通知参照前にもfindPendingNotifications／validHistoriesを通す。期限切れのOS通知を
-   取り消す処理は通知担当が接続する（DB削除はAndroid通知を取り消さない）。
+7. OS通知はdispatchCurrentNotificationsの現在期間ゲートを通す。
+   UiDataの保守処理でNotificationDispatcher.reconcileを呼び、失効・削除済み通知を取り消す。
 
 ```java
 repository.checkAndEndExpiredSession().thenAccept(status -> {
@@ -127,8 +127,8 @@ PeerSyncState、BlockDigest、SyncProgressは現在のブランチに存在し�
 新期間開始時の旧データ整理経路にも同じ対象を追加し、途中失敗時の全体ロールバックを
 検証してください。未実装のテーブルやBLEをダミー実装して完了扱いにはしていません。
 
-MainActivity、Service、BLE、SC04／SC06、OSスケジューラーへの接続は後続PRです。
-定期実行や復帰イベントの接続がなければ、APIが呼ばれるまで物理削除・停止通知は実行されません。
+MainActivity、SC04／SC06とUiDataの起動・復帰・約30秒のプロセス内保守処理は接続済みです。
+Service、BLEとプロセス停止中のOSスケジューラーは通信担当の接続範囲です。
 **アプリ停止中の72時間ちょうどのバックグラウンド実行は保証しません。** SQLite DELETEは
 復元不能な物理消去でもありません。最終期限確認・コミット・BLE送信は原子的に同期できないため、
 通信側の停止ゲートが必要です。
@@ -208,36 +208,29 @@ marks from it. Display reads now maintain session expiry and physically delete e
 
 ### Repository / NotificationDispatcher contract
 
-1. The repository saves history as PENDING in the same transaction as receipt.
-2. Only after commit succeeds does it expose BatchResult.notifications. Failure
-   rolls back all writes and completes exceptionally, without a notification result.
-3. Dispatcher treats results as wake-up hints and retrieves durable work with
-   `findPendingNotifications(sessionId)`. This returns immutable notification
-   requests for that session, including past sessions, excluding expired history.
-   On startup, discover retained session IDs from `validHistories()`, deduplicate
-   them, then query each session's pending queue. Do not restrict recovery to the
-   current session. Removal of a watch registration does not cancel saved work.
-4. After successful posting, call `markNotificationPosted(notificationId)`.
-5. If notification permission is denied, call `markNotificationBlocked(notificationId)`.
-   BLOCKED_PERMISSION is terminal in this contract; permission grants do not
-   automatically replay old notifications. POSTED is also terminal.
-6. Crashes before posting or transient delivery errors leave PENDING for retry.
-   DB update failures complete exceptionally and leave PENDING for later recovery.
-7. Updates are atomic compare-and-set operations on unexpired PENDING rows only.
-   They return true after commit, false for absent, expired or finalized rows.
-   Repeated/conflicting acknowledgements cannot overwrite a finalized state.
+1. Receipt and PENDING history are committed together. BatchResult is only exposed
+   after commit; use it as a wake-up hint via UiData.onBatchCommitted(result).
+2. NotificationDispatcher uses dispatchCurrentNotifications(NotificationSink).
+   Only the current ACTIVE session is eligible. The repository rechecks session
+   identity and expiry before every post inside its serialized transaction.
+   Historical PENDING rows MUST NOT be posted on startup or in a new period.
+3. The synchronous sink performs only short Android notification operations.
+   Never wait for repository work, network work, or UI interaction inside it.
+   A successful post becomes POSTED; denied permission becomes BLOCKED_PERMISSION.
+4. retryBlockedNotifications() explicitly retries only the current ACTIVE period.
+   It never changes receipt timestamps or history expiry. Permission/settings UI
+   invokes it after a user action; old periods remain ineligible.
+5. A transient exception leaves PENDING for later maintenance. Android and SQLite
+   cannot commit atomically: crash recovery may repost the same stable identity,
+   tag history:<notificationId>, integer ID 0, with onlyAlertOnce enabled.
+6. Dispatcher.reconcile() cancels OS entries whose history is absent or expired,
+   including recovery after DB deletion succeeded but OS cancellation did not.
 
-Dispatcher must serialize live and recovery work through one application-wide
-consumer; queue reads do not claim work. Use the persisted long notificationId as
-the stable identity: Android notification tag `crosspath-history:<notificationId>`
-and fixed integer ID 0. Do not truncate the long to an integer or generate a fresh
-identity on retry. Re-read pending work before issuing and recheck expiry. A crash
-between Android posting and DB acknowledgement can require reposting; reusing the
-same tag/ID replaces the existing notification instead of creating another entry.
-Dispatcher should suppress repeat alerts for updates. The DB and Android service
-cannot commit atomically, so exactly-once alerts are not guaranteed by this API.
-Actual Android posting, permission checks and Dispatcher implementation are out
-of scope; this section defines their required integration contract.
+The legacy findPendingNotifications(sessionId) and markNotification* APIs remain
+compatible, but historical queue access is not permission to issue a notification.
+Production delivery must use the guarded dispatcher above. This corrects the old
+README contract that requested replay across all retained periods; design section
+8.2 and IT-18 require delivery only during the current ACTIVE period.
 
 Create one AppDatabase for the application lifetime and pass a background
 ExecutorService to SafetyRepository. Do not call Room directly from UI or BLE.

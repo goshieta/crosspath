@@ -3,8 +3,6 @@ package com.example.crosspath;
 import android.content.Context;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.TypedValue;
 import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
@@ -67,19 +65,25 @@ public class MainActivity extends AppCompatActivity implements NavHost {
 
     /** 起動時の初期画面選定が未完了であることを示すフラグ。 */
     private boolean pendingInitialNavigation;
+    private boolean confirmationSaving;
+    private boolean notificationTap;
+    private boolean resumed;
+    private boolean restoredScreenPending;
+    private final java.util.function.Consumer<SessionStatus> periodListener = this::onSessionStatus;
+    public void setConfirmationSaving(boolean value) { confirmationSaving = value; }
+
 
     /** システムの戻る操作。SC03 のときだけ有効化して SC02 へ戻す。 */
     private final OnBackPressedCallback backCallback = new OnBackPressedCallback(false) {
         @Override
         public void handleOnBackPressed() {
+            if (confirmationSaving) return;
             Screen target = ScreenPolicy.backTarget(navigator.current());
             if (target != null) {
                 navigator.navigateBack(target);
             }
         }
     };
-
-    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private int insetLeft;
     private int insetTop;
@@ -88,6 +92,7 @@ public class MainActivity extends AppCompatActivity implements NavHost {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        emergencyMode = savedInstanceState != null && savedInstanceState.getBoolean("emergency");
         super.onCreate(savedInstanceState);
         UiData.init(getApplicationContext());
         EdgeToEdge.enable(this);
@@ -97,6 +102,10 @@ public class MainActivity extends AppCompatActivity implements NavHost {
         tabBarContainer = findViewById(R.id.bottom_tabs_container);
 
         navigator = new Navigator(getSupportFragmentManager(), R.id.fragment_container, this::applyScreenTheme);
+        if (savedInstanceState != null && savedInstanceState.getString("screen") != null) {
+            navigator.restoreCurrent(Screen.valueOf(savedInstanceState.getString("screen")));
+        }
+        notificationTap = com.example.crosspath.notification.NotificationDispatcher.ACTION_HISTORY.equals(getIntent().getAction());
         getOnBackPressedDispatcher().addCallback(this, backCallback);
         backCallback.setEnabled(false);
 
@@ -110,25 +119,43 @@ public class MainActivity extends AppCompatActivity implements NavHost {
             return insets;
         });
 
-        if (savedInstanceState == null) {
-            // 初回起動: セッション状態が確定するまで初期画面は決定しない
-            pendingInitialNavigation = true;
-            UiData.checkSession(this::onSessionStatus, error -> {});
-            // 1200ms フォールバック — セッション状態が返らない場合の安全策
-            mainHandler.postDelayed(fallbackRunnable, 1200);
-        }
+        pendingInitialNavigation = navigator.current() == null;
+        restoredScreenPending = !pendingInitialNavigation;
+        fragmentContainer.setVisibility(View.INVISIBLE);
+        tabBarContainer.setVisibility(View.GONE);
+        applyScreenTheme(navigator.current());
     }
 
-    /** フォールバック: セッション状態が返らない場合、未登録なら SC01、登録済みなら SC02 で初期画面を出す。 */
-    private final Runnable fallbackRunnable = () -> {
-        if (!pendingInitialNavigation) return;
-        emergencyMode = false;
-        showInitialScreen();
-    };
+    @Override protected void onSaveInstanceState(@NonNull Bundle state) {
+        if (navigator.current() != null) state.putString("screen", navigator.current().name());
+        state.putBoolean("emergency", emergencyMode);
+        super.onSaveInstanceState(state);
+    }
 
-    @Override
-    protected void onResume() {
+    @Override protected void onResume() {
         super.onResume();
+        resumed = true;
+        UiData.addListener(periodListener);
+        UiData.init(getApplicationContext());
+        UiData.checkSession(this::onSessionStatus, error -> {
+            if (!resumed || isFinishing()) return;
+            com.google.android.material.snackbar.Snackbar.make(fragmentContainer,
+                    "保存状態を読み込めません。再試行してください", com.google.android.material.snackbar.Snackbar.LENGTH_INDEFINITE)
+                    .setAction("再試行", view -> { UiData.init(getApplicationContext()); UiData.checkSession(this::onSessionStatus, ignored -> {}); }).show();
+        });
+        UiData.maintain();
+    }
+
+    @Override protected void onPause() {
+        resumed = false;
+        UiData.removeListener(periodListener);
+        super.onPause();
+    }
+
+    @Override protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        notificationTap = com.example.crosspath.notification.NotificationDispatcher.ACTION_HISTORY.equals(intent.getAction());
         UiData.checkSession(this::onSessionStatus, error -> {});
     }
 
@@ -143,18 +170,21 @@ public class MainActivity extends AppCompatActivity implements NavHost {
 
     @Override
     public void navigatePush(@NonNull Screen target) {
+        if (!resumed || getSupportFragmentManager().isStateSaved()) return;
         navigator.navigatePush(target);
         updateBackEnabled();
     }
 
     @Override
     public void navigateBack(@NonNull Screen target) {
+        if (!resumed || getSupportFragmentManager().isStateSaved()) return;
         navigator.navigateBack(target);
         updateBackEnabled();
     }
 
     @Override
     public void navigateTab(@NonNull Screen target) {
+        if (!resumed || getSupportFragmentManager().isStateSaved()) return;
         navigator.navigateTab(target);
         updateBackEnabled();
     }
@@ -169,7 +199,15 @@ public class MainActivity extends AppCompatActivity implements NavHost {
      * 緊急時モードの変化に応じてテーマ再適用・画面遷移・Fragment 再生成を行う。
      */
     public void onSessionStatus(@Nullable SessionStatus status) {
-        SessionStatus.State state = status == null ? null : status.state;
+        if (!resumed || getSupportFragmentManager().isStateSaved() || status == null) return;
+        fragmentContainer.setVisibility(View.VISIBLE);
+        if (restoredScreenPending) {
+            restoredScreenPending = false;
+            androidx.fragment.app.Fragment restored = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
+            if (restored instanceof Sc02HomeFragment) ((Sc02HomeFragment) restored).refreshIdentity();
+            applyScreenTheme(navigator.current());
+        }
+        SessionStatus.State state = status.state;
         boolean emergency = ScreenPolicy.emergencyMode(state);
 
         if (pendingInitialNavigation) {
@@ -178,13 +216,20 @@ public class MainActivity extends AppCompatActivity implements NavHost {
             return;
         }
 
+        if (notificationTap && UserProfile.isRegistered(this)) {
+            notificationTap = false;
+            getIntent().setAction(null);
+            navigator.navigateTab(Screen.SC06);
+        }
         Screen current = navigator.current();
         if (current == null) return;
 
         boolean themeChanged = emergency != emergencyMode;
         emergencyMode = emergency;
 
-        Screen target = ScreenPolicy.screenFor(current, state);
+        Screen target = current == Screen.SC03 && ScreenPolicy.isActivePeriod(state)
+                ? Screen.SC04 : ScreenPolicy.screenFor(current, state);
+        if (target == Screen.SC04) confirmationSaving = false;
         if (target != current) {
             navigator.navigatePush(target);   // 期限終了なら SC02
         } else if (themeChanged) {
@@ -198,11 +243,16 @@ public class MainActivity extends AppCompatActivity implements NavHost {
      */
     private void showInitialScreen() {
         pendingInitialNavigation = false;
-        mainHandler.removeCallbacks(fallbackRunnable);
+
 
         SessionStatus last = UiData.lastSessionStatus();
         SessionStatus.State state = last == null ? null : last.state;
         Screen target = ScreenPolicy.initialScreen(UserProfile.isRegistered(this), state);
+        if (notificationTap && UserProfile.isRegistered(this)) {
+            target = Screen.SC06;
+            notificationTap = false;
+            getIntent().setAction(null);
+        }
         navigator.showInitial(target);
         updateBackEnabled();
     }
@@ -230,7 +280,7 @@ public class MainActivity extends AppCompatActivity implements NavHost {
      * @param screen 表示する画面（null の場合は何もしない）
      */
     public void applyScreenTheme(Screen screen) {
-        if (screen == null) return;
+        if (screen == null || fragmentContainer == null || tabBarContainer == null || navigator == null) return;
 
         // 画面のテーマ Context から colorBackground（=colorSurface）を解決
         Context themedContext = new ContextThemeWrapper(this,
@@ -293,7 +343,13 @@ public class MainActivity extends AppCompatActivity implements NavHost {
      * タブが選ばれたときの画面遷移。タブ間は同階層なので X 軸の遷移を使う。
      */
     private void onTabSelected(@NonNull Screen target) {
-        navigator.navigateTab(target);
-        updateBackEnabled();
+        UiData.checkSession(status -> {
+            if (!resumed || getSupportFragmentManager().isStateSaved()) return;
+            Screen resolved = target == Screen.SC02 || target == Screen.SC04
+                    ? ScreenPolicy.initialScreen(UserProfile.isRegistered(this), status.state) : target;
+            navigator.navigateTab(resolved);
+            updateBackEnabled();
+        }, error -> com.google.android.material.snackbar.Snackbar.make(fragmentContainer,
+                "期間を確認できません。再試行してください", com.google.android.material.snackbar.Snackbar.LENGTH_LONG).show());
     }
 }
