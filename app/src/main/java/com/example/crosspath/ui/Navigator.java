@@ -87,7 +87,8 @@ public final class Navigator {
         Fragment existing = fragmentManager.findFragmentById(containerId);
         Fragment next = BottomTabs.newFragmentFor(current);
         if (existing != null && existing.getClass() == next.getClass()) {
-            // 同じクラス: 遷移せず Fragment を作り直してテーマ variant を反映。
+            // 入力・選択状態を保持してテーマ variant を反映。
+            next.setInitialSavedState(fragmentManager.saveFragmentInstanceState(existing));
             fragmentManager.beginTransaction()
                     .replace(containerId, next)
                     .commit();

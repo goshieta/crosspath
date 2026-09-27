@@ -42,7 +42,9 @@ public class Sc02HomeFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        LayoutInflater themedInflater = ScreenThemes.themedLayoutInflater(inflater, Screen.SC02);
+        boolean emergency = getActivity() instanceof MainActivity
+                && ((MainActivity) getActivity()).isEmergencyMode();
+        LayoutInflater themedInflater = ScreenThemes.themedLayoutInflater(inflater, Screen.SC02, emergency);
         return themedInflater.inflate(R.layout.fragment_sc02_home, container, false);
     }
 

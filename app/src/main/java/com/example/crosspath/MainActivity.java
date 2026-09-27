@@ -232,7 +232,7 @@ public class MainActivity extends AppCompatActivity implements NavHost {
         if (target == Screen.SC04) confirmationSaving = false;
         if (target != current) {
             navigator.navigatePush(target);   // 期限終了なら SC02
-        } else if (themeChanged && current == Screen.SC04) {
+        } else if (themeChanged) {
             navigator.reapplyTheme();          // テーマが変わったら再適用（必要なら作り直し）
         }
         updateBackEnabled();

@@ -47,7 +47,9 @@ public class Sc03MunicipalityFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        LayoutInflater themedInflater = ScreenThemes.themedLayoutInflater(inflater, Screen.SC03);
+        boolean emergency = getActivity() instanceof MainActivity
+                && ((MainActivity) getActivity()).isEmergencyMode();
+        LayoutInflater themedInflater = ScreenThemes.themedLayoutInflater(inflater, Screen.SC03, emergency);
         return themedInflater.inflate(R.layout.fragment_sc03_municipality, container, false);
     }
 

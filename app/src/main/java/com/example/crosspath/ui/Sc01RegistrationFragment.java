@@ -50,7 +50,9 @@ public class Sc01RegistrationFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        LayoutInflater themedInflater = ScreenThemes.themedLayoutInflater(inflater, Screen.SC01);
+        boolean emergency = getActivity() instanceof MainActivity
+                && ((MainActivity) getActivity()).isEmergencyMode();
+        LayoutInflater themedInflater = ScreenThemes.themedLayoutInflater(inflater, Screen.SC01, emergency);
         return themedInflater.inflate(R.layout.fragment_sc01_registration, container, false);
     }
 

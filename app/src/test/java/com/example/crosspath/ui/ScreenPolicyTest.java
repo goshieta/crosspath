@@ -118,9 +118,14 @@ public class ScreenPolicyTest {
         assertFalse(BottomTabs.showsTabs(Screen.SC01));
         assertFalse(BottomTabs.showsTabs(Screen.SC03));
 
-        assertFalse("SC05 は時計不確実時もライト",
+        assertTrue("SC05 は時計不確実時もダーク",
                 ScreenThemes.isEmergencyVariant(
                         Screen.SC05, ScreenPolicy.emergencyMode(SessionStatus.State.CLOCK_UNCERTAIN)));
+        for (Screen screen : Screen.values()) {
+            assertEquals(R.style.Theme_Survival_EmergencyDark, ScreenThemes.themeResFor(screen, true));
+            assertEquals(screen == Screen.SC04 ? R.style.Theme_Survival_EmergencyDark
+                    : R.style.Theme_Survival_Light, ScreenThemes.themeResFor(screen, false));
+        }
         assertFalse("期間終了中は SC05 はライト",
                 ScreenThemes.isEmergencyVariant(
                         Screen.SC05, ScreenPolicy.emergencyMode(SessionStatus.State.ENDED)));
