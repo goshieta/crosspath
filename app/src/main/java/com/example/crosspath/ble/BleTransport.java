@@ -17,6 +17,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 
 /** Chapter 6 transport. Owner supplies one serial executor and handles runtime permissions/lifetime. */
 @SuppressLint("MissingPermission")
@@ -32,6 +33,7 @@ public final class BleTransport {
     private final Context context;
     private final ScheduledExecutorService executor;
     private final Listener listener;
+    private final BooleanSupplier communicationAllowed;
     private final GattOperationQueue operations;
     private final MessageAssembler assembler = new MessageAssembler();
     private final SecureRandom random = new SecureRandom();
@@ -51,11 +53,17 @@ public final class BleTransport {
     private Role role;
 
     public BleTransport(Context context, ScheduledExecutorService executor, Listener listener) {
+        this(context, executor, listener, () -> true);
+    }
+    public BleTransport(Context context, ScheduledExecutorService executor, Listener listener,
+            BooleanSupplier communicationAllowed) {
         this.context = context.getApplicationContext(); this.executor = executor; this.listener = listener;
+        this.communicationAllowed = communicationAllowed;
         operations = new GattOperationQueue(executor, Protocol.OP_TIMEOUT_MS, () -> abort("GATT操作失敗／タイムアウト"));
     }
     public void start(Role role, boolean force23) {
         stop();
+        if (!checkGate()) return;
         this.role = role; this.force23 = force23;
         try {
             BluetoothManager manager = context.getSystemService(BluetoothManager.class);
@@ -74,6 +82,7 @@ public final class BleTransport {
     private void post(long generation, Runnable work) {
         try { executor.execute(() -> {
             if (!running || epoch != generation) return;
+            if (!checkGate()) return;
             try { work.run(); }
             catch (SecurityException error) { abort("権限が取り消されました"); }
             catch (RuntimeException error) { abort("BLE／プロトコルエラー"); }
@@ -95,6 +104,7 @@ public final class BleTransport {
     }
     private void discover() {
         if (!running || peer != null) return;
+        if (!checkGate()) return;
         long generation = epoch;
         if (role != Role.CLIENT) {
             advertising = new AdvertiseCallback() {
@@ -291,6 +301,7 @@ public final class BleTransport {
     }
     /** Completion means only GATT delivery. It is NEVER a database-save ACK. */
     public void send(int type, byte[] body, Runnable delivered) {
+        if (!checkGate()) return;
         if (!ready) throw new IllegalStateException("Not connected");
         List<byte[]> frames = FrameCodec.fragment(type, messageId++ & 65535, body, mtu);
         long generation = epoch;
@@ -299,12 +310,14 @@ public final class BleTransport {
             byte[] frame = frames.get(i);
             Runnable complete = i == frames.size() - 1 ? delivered : () -> { };
             if (initiating) operations.add("write", () -> {
+                if (!checkGate()) return false;
                 if (Build.VERSION.SDK_INT >= 33) return client.writeCharacteristic(rx, frame,
                         BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS;
                 rx.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT); rx.setValue(frame);
                 return client.writeCharacteristic(rx);
             }, complete);
             else operations.add("indicate", () -> {
+                if (!checkGate()) return false;
                 if (Build.VERSION.SDK_INT >= 33) return server.notifyCharacteristicChanged(peer, tx, true, frame) == BluetoothStatusCodes.SUCCESS;
                 tx.setValue(frame); return server.notifyCharacteristicChanged(peer, tx, true);
             }, complete);
@@ -343,4 +356,9 @@ public final class BleTransport {
         listener.onDisconnected();
     }
     public void abort(String reason) { stop(); listener.onStatus(reason + "（開始ボタンで再試行）"); }
+    private boolean checkGate() {
+        if (communicationAllowed.getAsBoolean()) return true;
+        abort("通信期間が終了、または時計の確認が必要です");
+        return false;
+    }
 }

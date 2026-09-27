@@ -1,35 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/main" android:layout_width="match_parent" android:layout_height="match_parent"
-    android:fillViewport="true">
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="vertical" android:padding="24dp">
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="@string/ble_title" android:textSize="24sp" android:textStyle="bold" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="@string/ble_notice" android:paddingTop="12dp" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:labelFor="@id/role" android:text="@string/ble_role" android:paddingTop="16dp" />
-        <Spinner android:id="@+id/role" android:layout_width="match_parent" android:layout_height="48dp" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:labelFor="@id/user_id" android:text="@string/ble_test_id" />
-        <EditText android:id="@+id/user_id" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:minHeight="48dp" android:inputType="number" android:text="1" android:maxLength="8"
-            android:importantForAutofill="no" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:labelFor="@id/municipality" android:text="@string/ble_location" />
-        <Spinner android:id="@+id/municipality" android:layout_width="match_parent" android:layout_height="48dp" />
-        <CheckBox android:id="@+id/mtu23" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:minHeight="48dp" android:text="@string/ble_mtu23" />
-        <Button android:id="@+id/confirm" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="@string/ble_confirm" />
-        <CheckBox android:id="@+id/pause_ack" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:saveEnabled="false" android:minHeight="48dp" android:text="@string/ble_pause_ack" />
-        <Button android:id="@+id/start" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="@string/ble_start" />
-        <Button android:id="@+id/stop" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="@string/ble_stop" />
-        <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="@string/ble_idle" android:paddingTop="16dp" android:accessibilityLiveRegion="polite" />
-    </LinearLayout>
-</ScrollView>
+<!--
+  画面の外枠。下部タブバーは「ページ（Fragment）の中の部品」ではなく、
+  ページを切り替える Activity 側のコンポーネントとしてここに置く。
+  - fragment_container: 切り替わるページ本体（遷移アニメーションの対象）
+  - bottom_tabs_container: 画面下部に固定されるタブバー（遷移では動かない／全幅）
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context=".MainActivity">
+
+    <Button
+        android:id="@+id/open_ble_debug"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
+        android:visibility="gone"
+        android:text="@string/ble_open_debug" />
+
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/fragment_container"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <FrameLayout
+        android:id="@+id/bottom_tabs_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+</LinearLayout>

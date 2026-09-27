@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 仕様 §11.13 指定の基本余白 -->
+    <dimen name="screen_margin_horizontal">16dp</dimen>
+    <dimen name="element_margin_small">8dp</dimen>
+    <dimen name="element_margin_medium">16dp</dimen>
+    <dimen name="section_margin_large">24dp</dimen>
+    <dimen name="button_min_height">48dp</dimen>
+    <dimen name="card_corner_radius">16dp</dimen>
+    <!-- 生存登録のヒーローCTA（最も強い操作） 仕様 §11.3 -->
+    <dimen name="sc02_survival_button_min_height">120dp</dimen>
+    <!-- 一覧の〇／ーバッジ 仕様 §11.8 -->
+    <dimen name="status_badge_size">32dp</dimen>
+</resources>
