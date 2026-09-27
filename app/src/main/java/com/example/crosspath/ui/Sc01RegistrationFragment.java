@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -17,6 +18,9 @@ import androidx.fragment.app.Fragment;
 
 import com.example.crosspath.MainActivity;
 import com.example.crosspath.R;
+import com.example.crosspath.registration.RegistrationError;
+import com.example.crosspath.registration.RegistrationException;
+import com.example.crosspath.ui.data.UiData;
 import com.example.crosspath.ui.data.UserProfile;
 import com.example.crosspath.ui.theme.ScreenThemes;
 import com.example.crosspath.ui.theme.ViewAnims;
@@ -28,10 +32,12 @@ import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
 /**
- * SC01 初回登録画面。仕様: 詳細設計書 v0.8 §11.2
+ * SC01 初回登録画面。仕様: 詳細設計書 v0.8 §11.2 / crosspath-registration-spec.md §3.9
  *
- * 自分の名前を入力し、登録して個人IDを取得する初回画面。
+ * 自分の名前を入力し、IDサーバーが採番した個人IDを取得する初回画面。
  * 登録成功後に個人IDカード・コピー・ホームを表示する。
+ * 通信は {@link UserProfile#register} の先（RegistrationGateway）がワーカーで行い、
+ * UI更新は {@link UiData#onResult} がメインスレッドへ返す。失敗時はボタンを再有効化して再試行を促す。
  */
 public class Sc01RegistrationFragment extends Fragment {
 
@@ -43,7 +49,7 @@ public class Sc01RegistrationFragment extends Fragment {
     private TextView resultText;
     private MaterialButton copyButton;
     private MaterialButton homeButton;
-    private android.widget.EditText debugId;
+    private ProgressBar progressBar;
 
     @Nullable
     @Override
@@ -68,24 +74,18 @@ public class Sc01RegistrationFragment extends Fragment {
         idCard = view.findViewById(R.id.sc01_id_card);
         copyButton = view.findViewById(R.id.sc01_button_copy);
         homeButton = view.findViewById(R.id.sc01_button_home);
+        progressBar = view.findViewById(R.id.sc01_progress_bar);
 
         // 初期状態: IDカードと関連ボタンは非表示
         idCard.setVisibility(View.GONE);
         copyButton.setVisibility(View.GONE);
         homeButton.setVisibility(View.GONE);
+        progressBar.setVisibility(View.GONE);
 
         if (getActivity() instanceof MainActivity) {
             ((MainActivity) getActivity()).applyScreenTheme(Screen.SC01);
         }
 
-        if (com.example.crosspath.registration.RegistrationProvider.HAS_DEBUG_INPUT) {
-            debugId = new android.widget.EditText(requireContext());
-            debugId.setId(R.id.debug_registration_id);
-            debugId.setHint("デモ専用ID（端末間で重複しない1〜16777215）");
-            debugId.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-            ViewGroup parent = (ViewGroup) registerButton.getParent();
-            parent.addView(debugId, parent.indexOfChild(registerButton));
-        }
         if (UserProfile.isRegistered(requireContext())) showRegistered();
         registerButton.setOnClickListener(v -> onRegisterClicked());
         copyButton.setOnClickListener(v -> onCopyClicked());
@@ -103,29 +103,33 @@ public class Sc01RegistrationFragment extends Fragment {
         }
         nameInputLayout.setError(null);
 
+        // 登録中: ボタンを無効化してスピナーを出す（二重送信を防ぐ）
         registerButton.setEnabled(false);
+        progressBar.setVisibility(View.VISIBLE);
+        resultText.setVisibility(View.VISIBLE);
+        resultText.setText(R.string.sc01_registering);
+        resultText.setTextColor(MaterialColors.getColor(resultText, android.R.attr.textColorSecondary));
+        resultText.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0);
+
         final View owner = requireView();
-        com.example.crosspath.ui.data.UiData.onResult(UserProfile.register(requireContext(), name,
-                debugId == null ? "" : debugId.getText().toString().trim()), assigned -> {
+        UiData.onResult(UserProfile.register(requireContext(), name), assigned -> {
             if (!isAdded() || getView() != owner) return;
             showRegistered();
         }, error -> {
             if (!isAdded() || getView() != owner) return;
-            registerButton.setEnabled(true);
-            Throwable cause = error;
-            while (cause.getCause() != null) cause = cause.getCause();
-            resultText.setText(cause.getMessage());
-            resultText.setVisibility(View.VISIBLE);
+            showError(error);
         });
     }
 
     private void showRegistered() {
         registerButton.setEnabled(false);
         nameEditText.setEnabled(false);
-        if (debugId != null) debugId.setEnabled(false);
+        progressBar.setVisibility(View.GONE);
         idValueText.setText(String.valueOf(UserProfile.personalId(requireContext())));
         // 登録結果表示 仕様 §11.2(4)（成功アイコン付き）
         resultText.setText(R.string.sc01_result_success);
+        resultText.setTextColor(MaterialColors.getColor(resultText,
+                com.google.android.material.R.attr.colorPrimary));
         TextViewCompat.setCompoundDrawableTintList(resultText, ColorStateList.valueOf(
                 MaterialColors.getColor(resultText, com.google.android.material.R.attr.colorPrimary)));
         resultText.setCompoundDrawablesRelativeWithIntrinsicBounds(
@@ -135,8 +139,54 @@ public class Sc01RegistrationFragment extends Fragment {
         idCard.setVisibility(View.VISIBLE);
         copyButton.setVisibility(View.VISIBLE);
         homeButton.setVisibility(View.VISIBLE);
-        // IDカードの出現（登録成直後に1回だけ）
+        // IDカードの出現（登録成功直後に1回だけ）
         ViewAnims.appearOnce(idCard);
+    }
+
+    /**
+     * 登録エラーを UI に表示する。
+     * 入力した名前はそのまま残し、ボタンを再有効化して再試行を促す（自動再登録はしない）。
+     */
+    private void showError(Throwable error) {
+        // CompletionException などで包まれているので、最初に見つかる RegistrationException を使う。
+        // 原因を根まで辿ると RegistrationException の cause（IOException 等）になり、分類が失われる。
+        Throwable cause = error;
+        while (cause != null && !(cause instanceof RegistrationException) && cause.getCause() != null) {
+            cause = cause.getCause();
+        }
+
+        int messageResId = cause instanceof RegistrationException
+                ? getErrorMessageResId((RegistrationException) cause)
+                : R.string.sc01_error_unexpected;
+
+        resultText.setVisibility(View.VISIBLE);
+        resultText.setText(messageResId);
+        resultText.setTextColor(MaterialColors.getColor(resultText,
+                com.google.android.material.R.attr.colorError));
+        resultText.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                R.drawable.ic_error_24, 0, 0, 0);
+
+        progressBar.setVisibility(View.GONE);
+        registerButton.setEnabled(true);
+    }
+
+    /**
+     * RegistrationException から表示するエラー文言リソースIDを取得する。
+     * HTTPコードの分岐を UI に散らかさない。
+     */
+    private int getErrorMessageResId(RegistrationException e) {
+        switch (e.getRegistrationError()) {
+            case NETWORK:
+                return R.string.sc01_error_network;
+            case CONFLICT:
+                return R.string.sc01_error_conflict;
+            case RETIRED:
+                return R.string.sc01_error_retired;
+            case ID_SPACE_EXHAUSTED:
+                return R.string.sc01_error_exhausted;
+            default:
+                return R.string.sc01_error_unexpected;
+        }
     }
 
     private void onCopyClicked() {
