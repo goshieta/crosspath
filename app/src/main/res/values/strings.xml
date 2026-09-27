@@ -21,6 +21,14 @@
     <string name="sc01_id_card_title">あなたの個人ID</string>
     <string name="sc01_toast_copied">個人IDをコピーしました</string>
     <string name="sc01_result_success">登録できました</string>
+    <!-- SC01 登録中・エラー文言 仕様: crosspath-registration-spec.md §3.9 -->
+    <string name="sc01_registering">登録中…</string>
+    <string name="sc01_error_network">サーバーに接続できませんでした。通信環境を確認して、もう一度お試しください</string>
+    <string name="sc01_error_conflict">この端末はすでに登録済みです。保存済みの個人IDを確認できませんでした</string>
+    <string name="sc01_error_retired">この登録は終了しているため、再登録できません</string>
+    <string name="sc01_error_exhausted">IDの採番上限に達したため、登録を受け付けられません</string>
+    <string name="sc01_error_unexpected">登録に失敗しました。時間をおいて、もう一度お試しください</string>
+    <string name="sc01_error_id_missing">個人IDを取得できませんでした</string>
     <!-- SC02 -->
     <string name="sc02_title">ホーム</string>
     <string name="sc02_button_survival">生存登録</string>

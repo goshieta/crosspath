@@ -52,6 +52,9 @@ public class UiJourneyTest {
         assertEquals("com.example.crosspath.debug", context.getPackageName());
         context.deleteDatabase("crosspath.db");
         assertTrue(context.getSharedPreferences("user_profile", Context.MODE_PRIVATE).edit().clear().commit());
+        // 実サーバーへは接続せず、計測テストでは採番結果を固定する（ID手入力のデモ欄は廃止済み）
+        com.example.crosspath.registration.RegistrationProvider.overrideGatewayForTests(
+                (requestId, name) -> 1001);
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             try (android.os.ParcelFileDescriptor descriptor = InstrumentationRegistry.getInstrumentation().getUiAutomation()
                     .executeShellCommand("pm grant " + context.getPackageName() + " android.permission.POST_NOTIFICATIONS")) {
@@ -63,7 +66,6 @@ public class UiJourneyTest {
         try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
             waitFor(scenario, activity -> screen(activity, Sc01RegistrationFragment.class));
             scenario.onActivity(activity -> ((TextView) activity.findViewById(R.id.sc01_name_edit_text)).setText("Demo Person"));
-            scenario.onActivity(activity -> ((TextView) activity.findViewById(R.id.debug_registration_id)).setText("1001"));
             scenario.onActivity(activity -> activity.findViewById(R.id.sc01_button_register).performClick());
             waitFor(scenario, activity -> activity.findViewById(R.id.sc01_button_home).getVisibility() == View.VISIBLE);
             assertEquals(1001, UserProfile.personalId(context));

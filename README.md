@@ -72,7 +72,8 @@ UI・Room・Android通知・期限再評価を接続済み。BLE／同期／通�
 | 出現アニメーションヘルパ | `ui/theme/ViewAnims.java` |
 | 下部タブバー | `ui/BottomTabs.java`・`res/layout/include_bottom_tabs.xml`・`res/menu/menu_bottom_tabs.xml` |
 | データアクセス口（UI から DB への唯一の経路） | `ui/data/UiData.java` |
-| 本人プロファイル（名前・個人IDのローカル保存） | `ui/data/UserProfile.java` |
+| 本人プロファイル（名前の保存。個人IDはIDサーバーの採番値を保存） | `ui/data/UserProfile.java` |
+| 個人IDの初回登録（サーバー通信・冪等リトライ・secret 保存） | `registration/`（`RegistrationRepository` ほか） |
 | 共通リソース（色） | `res/values/colors.xml` |
 | 共通リソース（テーマ） | `res/values/themes.xml` |
 | 共通リソース（寸法） | `res/values/dimens.xml` |
@@ -182,7 +183,7 @@ UI は DB を直接触らず、`ui/data/UiData.java` を通して `data/SafetyRe
 
 | 画面 | 実データの使い方 |
 |---|---|
-| SC01 | `UserProfile.register()`で非同期登録・永続保存。debugは明示的デモID入力、releaseはRegistrationGatewayのAPI接続待ち。ランダムIDは発行しない |
+| SC01 | `UserProfile.register()`（非同期・永続保存）から IDサーバー `POST /v1/registrations` で採番された個人IDを取得して保存（§「初回登録（IDサーバー接続）」）。端末内でランダムIDは発行しない |
 | SC02 | 自分の個人ID（`UserProfile`）を表示・コピー・共有。生存登録はタイマー作動中なら SC04、停止中は SC03 |
 | SC03 | `KyushuMunicipalities.prefectures()`（同梱の九州自治体マスター）で県・市町村を選択し、確定操作時刻のトークンを渡して `startSessionAtConfirmation()` |
 | SC04 | `checkSession()` で期限判定（`checkAndEndExpiredSession()`）を伴う状態取得→`SessionStatus` に応じて`remainingMillis` のスナップショットを1秒ずつ減らして表示（0で再確認→SC02 へ）。`currentWatchStatuses()` で〇／ーを表示 |
@@ -223,23 +224,38 @@ UI は DB を直接触らず、`ui/data/UiData.java` を通して `data/SafetyRe
 
 - BLE/GATT 通信（SC04 の通信状態表示は「通信期間中／通信できません／未開始」の段階表示。
   通信不能理由の実検知は BLE・権限・Foreground Service の実装後）
-- 個人IDのサーバ発行・認証・復旧。debugは別applicationId `com.example.crosspath.debug` でデモIDを入力し、releaseには持ち込まない。
+- 個人ID の再発行・復旧 UI（`GET /v1/registrations/me` による復旧は `RegistrationRepository` に実装済みだが画面は無い）
 - Foreground Service
-- 登録 API（サーバ側の本人登録）
+- Android 通知の発行（`NotificationHistory` の PENDING/POSTED/BLOCKED を使う Dispatcher）
+- 登録失敗時の詳細表示（`X-Trace-Id` を画面に出さずログのみ）
 - ViewModel 層（現状は Fragment から `UiData` を直接呼ぶ薄い構成）
 - BLE/Service の実停止処理（`SessionStopHandler` の実通信停止）
-## BLE通信・中継サービス・同期アルゴリズム（PRで追加）
 
-通常画面（SC04）から `connectedDevice` 型の `RelayForegroundService` を起動し、
-BLE 広告・探索・GATT 双方向交換・Room 保存までを自動で行う。
+## 初回登録（IDサーバー接続）
 
-- 同期方式: FULL（段階1〜5）／FLAT（段階6）／HIERARCHICAL（L1・L1'・L2・L3、段階7）。
-  設計書 v0.8 第6〜7章・第10章に対応。プロトコル major は 4。
-- 1件の生存情報は個人ID 24bit＋生存地点 1Bの固定4B。登録時刻・世代・署名は送信しない。
-- debug 版のみ画面上部の「BLE検証画面を開く」から `BleDebugActivity`（Client／Server／AUTO、
-  MTU 23、FULL／FLAT／HIERARCHICAL 選択、保存後ACK待機）を開ける。release では入口を出さない。
-- 期限切れ・時計異常・DB エラーによる停止は `SessionStopRegistry` → `SessionTransportGate` が
-  各 BLE コールバックで検知し、通信を停止する。
+SC01 の「登録する」で、IDサーバーから 24bit の個人IDを取得して保存する。端末内でIDを生成する旧実装（乱数）は廃止した。
 
-詳細は [docs/RELAY_SERVICE.md](docs/RELAY_SERVICE.md)、[docs/BLE_VERIFICATION.md](docs/BLE_VERIFICATION.md)、
-[docs/CHAPTER10_SYNC.md](docs/CHAPTER10_SYNC.md) を参照。
+| 項目 | 内容 |
+|---|---|
+| エンドポイント | `POST https://id-server-1084526017972.asia-northeast1.run.app/v1/registrations`（再取得は `GET /v1/registrations/me`） |
+| 認証 | `Authorization: Bearer <registration_secret>`。secret は 32 バイト乱数の base64url（パディング無し43文字）を端末で生成 |
+| 冪等性 | `request_id`（UUID v4）を `UserProfile` が**通信前に保存**し、リトライでは同じ値を再利用する（同じ secret＋同じ request_id は 200 で同じ user_id が返る） |
+| 競合復旧 | 409 のときは `GET /v1/registrations/me` で保存済みIDの復旧を試みる |
+| リトライ | 429 / 408 / 5xx は `Retry-After` を尊重し、無ければ指数バックオフ（1s→2s→4s、±20%ジッター、最大4試行）。400 / 401 / 409 / 410 / `ID_SPACE_EXHAUSTED` はリトライしない |
+| 保存 | `SharedPreferences`（`user_profile`）の 1 か所にまとめる。`personal_id` / `name` / `request_id` / `identity_source` は `UserProfile`、`secret`（**AndroidKeyStore の AES/GCM 鍵で暗号化**。平文保存へのフォールバックはしない） / `user_id` / `created_at` は `PrefsRegistrationStore` が担当 |
+| 通信スレッド | 単一の `ExecutorService`。UI スレッドでは通信しない（結果は Handler で main へ post） |
+
+実装は `app/src/main/java/com/example/crosspath/registration/` に集約する。呼び出しの流れは
+`Sc01RegistrationFragment` → `UserProfile.register()` → `RegistrationProvider.gateway(context)`（本番は `ServerRegistrationGateway`）
+→ `RegistrationRepository` → `HttpRegistrationApi` / `PrefsRegistrationStore`。debug / release とも同じ本番実装を使う（デモ用の ID 手入力は廃止）。
+
+| クラス | 役割 |
+|---|---|
+| `RegistrationProvider` / `RegistrationGateway` | 登録処理の組み立てと継ぎ目。本番は `ServerRegistrationGateway` を返す（計測テストのみ `overrideGatewayForTests` で差し替え） |
+| `ServerRegistrationGateway` | `RegistrationGateway` の本番実装。`request_id` を受けて採番された `user_id` を返す薄いアダプタ |
+| `RegistrationRepository` | 登録操作の全体（冪等性・リトライ・競合復旧）。`RegistrationHttp` と `RegistrationStore` を注入して受け取る |
+| `HttpRegistrationApi` / `RegistrationHttp` | `HttpURLConnection` 実装（connect 5s / read 10s）と差し替え可能なインターフェース |
+| `PrefsRegistrationStore` / `RegistrationStore` | secret・request_id・user_id・created_at の永続化（テスト用に `InMemoryRegistrationStore`） |
+| `RegistrationSecret` / `RegistrationJson` / `RegistrationResponse` / `RegistrationRetryPolicy` / `RegistrationError` / `RegistrationException` | 純粋ロジック（JVM ユニットテスト対象） |
+
+ユニットテストは `app/src/test/java/com/example/crosspath/registration/`（`RegistrationRepositoryTest` は偽 HTTP で request_id の再利用・409→me 復旧・秘密値の非漏洩、`ServerRegistrationGatewayTest` は request_id の受け渡しと登録済み端末で通信しないことを検証）。

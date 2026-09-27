@@ -49,6 +49,15 @@
             app:icon="@drawable/ic_person_add_24"
             style="@style/Widget.Material3.Button" />
 
+        <!-- 登録中インジケーター 仕様: crosspath-registration-spec.md §3.9(2) -->
+        <com.google.android.material.progressindicator.CircularProgressIndicator
+            android:id="@+id/sc01_progress_bar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/element_margin_medium"
+            android:visibility="gone"
+            android:indeterminate="true" />
+
         <!-- 4. 登録結果表示 仕様 §11.2(4) -->
         <TextView
             android:id="@+id/sc01_result_text"
