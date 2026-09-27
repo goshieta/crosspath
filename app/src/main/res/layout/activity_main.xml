@@ -12,13 +12,11 @@
     android:orientation="vertical"
     tools:context=".MainActivity">
 
-    <Button
-        android:id="@+id/open_ble_debug"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:minHeight="48dp"
-        android:visibility="gone"
-        android:text="@string/ble_open_debug" />
+    <!--
+      BLE検証画面（BleDebugActivity）へのUI導線は置かない。
+      debugビルドでのみ存在するActivityで、PCから adb shell am start -n
+      com.example.crosspath.debug/com.example.crosspath.BleDebugActivity で起動する。
+    -->
 
     <androidx.fragment.app.FragmentContainerView
         android:id="@+id/fragment_container"

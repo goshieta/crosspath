@@ -2,7 +2,9 @@
 
 > main統合前の実装説明・実機試験記録を保持した文書です。現在の起動先・期限管理・共有DBの構成は
 > [README](../README.md) を参照してください。旧 `MainActivity` は `BleDebugActivity` に移動しました。
-> main統合後は通常画面上部の「BLE検証画面を開く」から以下の試験画面を開きます。
+> main統合後は通常画面に導線を置かず、PCから
+> `adb shell am start -n com.example.crosspath.debug/com.example.crosspath.BleDebugActivity`
+> で以下の試験画面を開きます（debugビルド限定）。
 
 Android Studioでこのフォルダーを開き、Gradle Sync後、`app` のdebug構成を実機へ実行します。
 Java 11ソース、minSdk 31（Android 12）、compileSdk / targetSdk 36、Build Tools 36.1.0。
