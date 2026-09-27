@@ -6,7 +6,12 @@
 
 ## 検証画面
 
-通常画面上部の「BLE検証画面を開く」から使用します。両端末を新しいAPKへ更新してください。
+通常画面に導線はありません（検証用ボタンは廃止）。PCから次のコマンドで開きます（debugビルド限定）。
+両端末を新しいAPKへ更新してください。
+
+```
+adb shell am start -n com.example.crosspath.debug/com.example.crosspath.BleDebugActivity
+```
 
 - FULL：従来の全件交換。従来のMTU23・保存後ACK待機の試験を保持。
 - FLAT：SHA-256のSUMMARYが一致すればDATAなし。不一致なら256 ID以下のID_LISTを交換し、

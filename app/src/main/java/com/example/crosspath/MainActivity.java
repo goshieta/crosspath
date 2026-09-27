@@ -150,13 +150,9 @@ public class MainActivity extends AppCompatActivity implements NavHost {
         UiData.init(getApplicationContext());
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
-        View bleDebug = findViewById(R.id.open_ble_debug);
-        bleDebug.setVisibility(BuildConfig.DEBUG ? View.VISIBLE : View.GONE);
-        bleDebug.setOnClickListener(v -> {
-            ((CrosspathApplication) getApplication()).bleDebugActive = true;
-            stopService(new android.content.Intent(this, com.example.crosspath.service.RelayForegroundService.class));
-            startActivity(new android.content.Intent(this, BleDebugActivity.class));
-        });
+        // BLE検証画面（BleDebugActivity）へのUI導線は設けない。debugビルド限定の画面で、
+        // PCから adb shell am start -n com.example.crosspath.debug/com.example.crosspath.BleDebugActivity
+        // で起動する（画面側で bleDebugActive の設定と中継サービスの停止を行う）。
 
         fragmentContainer = findViewById(R.id.fragment_container);
         tabBarContainer = findViewById(R.id.bottom_tabs_container);
@@ -175,10 +171,6 @@ public class MainActivity extends AppCompatActivity implements NavHost {
             insetTop = systemBars.top;
             insetRight = systemBars.right;
             insetBottom = systemBars.bottom;
-            if (BuildConfig.DEBUG) {
-                bleDebug.setPadding(insetLeft, insetTop, insetRight, 0);
-                insetTop = 0;
-            }
             updateContentPadding();
             return insets;
         });
