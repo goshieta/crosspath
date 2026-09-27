@@ -42,7 +42,9 @@ public class Sc02HomeFragment extends Fragment {
     public View onCreateView(@NonNull LayoutInflater inflater,
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        LayoutInflater themedInflater = ScreenThemes.themedLayoutInflater(inflater, Screen.SC02);
+        boolean emergency = getActivity() instanceof MainActivity
+                && ((MainActivity) getActivity()).isEmergencyMode();
+        LayoutInflater themedInflater = ScreenThemes.themedLayoutInflater(inflater, Screen.SC02, emergency);
         return themedInflater.inflate(R.layout.fragment_sc02_home, container, false);
     }
 
@@ -74,15 +76,25 @@ public class Sc02HomeFragment extends Fragment {
 
     }
 
+    public void refreshIdentity() {
+        if (getView() != null) idValueText.setText(String.valueOf(UserProfile.personalId(requireContext())));
+    }
+
     private void onSurvivalClicked() {
-        // 仕様 §11.1: SC02 → 生存ボタン → ACTIVE 期間有無で分岐
-        Screen target;
-        if (UiData.isActivePeriod()) {
-            target = Screen.SC04;
-        } else {
-            target = Screen.SC03;
-        }
-        ((NavHost) requireActivity()).navigatePush(target);
+        if (!survivalButton.isEnabled()) return;
+        survivalButton.setEnabled(false);
+        final View owner = requireView();
+        UiData.checkSession(status -> {
+            if (!isAdded() || getView() != owner) return;
+            survivalButton.setEnabled(true);
+            Screen target = !UserProfile.isRegistered(requireContext()) ? Screen.SC01
+                    : ScreenPolicy.isActivePeriod(status.state) ? Screen.SC04 : Screen.SC03;
+            ((NavHost) requireActivity()).navigatePush(target);
+        }, error -> {
+            if (!isAdded() || getView() != owner) return;
+            survivalButton.setEnabled(true);
+            Snackbar.make(owner, "期間を確認できません。再試行してください", Snackbar.LENGTH_LONG).show();
+        });
     }
 
     private void onCopyClicked() {

@@ -2,49 +2,82 @@ package com.example.crosspath.ui.data;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import com.example.crosspath.data.WireRecord;
+import com.example.crosspath.registration.RegistrationProvider;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-import java.security.SecureRandom;
-
-/**
- * 初回登録（名前・個人ID）のローカル保存。
- * SharedPreferences（ファイル名 "user_profile", MODE_PRIVATE）。
- *
- * 仕様: ui-data-integration-plan.md §I1-2
- */
+/** Durable local identity; UI getters use only a worker-loaded snapshot. */
 public final class UserProfile {
-    private static final String PREFS_NAME = "user_profile";
-    private static final String KEY_NAME = "name";
-    private static final String KEY_PERSONAL_ID = "personal_id";
+    private static final ExecutorService IO = Executors.newSingleThreadExecutor();
+    private static volatile int id;
+    private static volatile String displayName = "";
+    private static CompletableFuture<Void> loading;
 
-    /** 登録済みなら true。基準は personalId > 0。 */
-    public static boolean isRegistered(Context context) {
-        return personalId(context) > 0;
-    }
-
-    /**
-     * 未登録なら ID を 1..0xFFFFFF で生成して保存。登録済みなら名前だけ更新し ID は維持。
-     */
-    public static void register(Context context, String name) {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        int existingId = prefs.getInt(KEY_PERSONAL_ID, 0);
-        if (existingId == 0) {
-            existingId = new SecureRandom().nextInt(0xFFFFFF) + 1;
-            prefs.edit().putInt(KEY_PERSONAL_ID, existingId).apply();
+    public static synchronized CompletableFuture<Void> load(Context context) {
+        Context app = context.getApplicationContext();
+        if (loading == null || loading.isCompletedExceptionally()) {
+            loading = CompletableFuture.runAsync(() -> {
+                SharedPreferences prefs = preferences(app);
+                int stored = prefs.getInt("personal_id", 0);
+                if (stored != 0) WireRecord.requireUserId(stored);
+                if (stored != 0 && !RegistrationProvider.HAS_DEBUG_INPUT
+                        && !"SERVER".equals(prefs.getString("identity_source", ""))) {
+                    throw new IllegalStateException("旧版の未検証IDです。本人IDの移行方法を確認してください。");
+                }
+                displayName = prefs.getString("name", "");
+                id = stored;
+            }, IO);
         }
-        prefs.edit().putString(KEY_NAME, name).apply();
+        return loading;
     }
 
-    /** 未登録なら "" を返す。 */
-    public static String name(Context context) {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getString(KEY_NAME, "");
+    public static CompletableFuture<Integer> register(Context context, String name, String debugId) {
+        Context app = context.getApplicationContext();
+        return load(app).thenApplyAsync(ignored -> {
+            if (id != 0) return id;
+            if (name == null || name.codePoints().allMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c))) {
+                throw new IllegalArgumentException("名前を入力してください");
+            }
+            SharedPreferences prefs = preferences(app);
+            String request = prefs.getString("request_id", null);
+            String pendingName = prefs.getString("request_name", name);
+            String pendingId = prefs.getString("request_debug_id", debugId);
+            if (request == null) {
+                request = UUID.randomUUID().toString();
+            }
+            {
+                if (!prefs.edit().putString("request_id", request).putString("request_name", pendingName)
+                        .putString("request_debug_id", pendingId).commit()) {
+                    throw new IllegalStateException("登録要求を保存できません。空き容量を確認して再試行してください。");
+                }
+            }
+            try {
+                int assigned = RegistrationProvider.gateway().register(request, pendingName, pendingId);
+                WireRecord.requireUserId(assigned);
+                if (!prefs.edit().putInt("personal_id", assigned).putString("name", pendingName)
+                        .putString("identity_source", RegistrationProvider.HAS_DEBUG_INPUT ? "DEBUG" : "SERVER").commit()) {
+                    throw new IllegalStateException("本人IDを保存できません。同じ登録要求で再試行してください。");
+                }
+                displayName = pendingName;
+                id = assigned;
+                return assigned;
+            } catch (IllegalArgumentException invalid) {
+                prefs.edit().remove("request_id").remove("request_name").remove("request_debug_id").commit();
+                throw invalid;
+            } catch (Exception failure) {
+                throw new java.util.concurrent.CompletionException(failure);
+            }
+        }, IO);
     }
 
-    /** 未登録なら 0 を返す。 */
-    public static int personalId(Context context) {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getInt(KEY_PERSONAL_ID, 0);
+    private static SharedPreferences preferences(Context context) {
+        return context.getSharedPreferences("user_profile", Context.MODE_PRIVATE);
     }
-
+    public static boolean isRegistered(Context context) { return id > 0; }
+    public static int personalId(Context context) { return id; }
+    public static String name(Context context) { return displayName; }
     private UserProfile() {}
 }
