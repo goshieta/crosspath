@@ -7,9 +7,9 @@
 
 ### 前提条件
 
-- Android Studio Koala (2024.x) 以降
+- AGP 9.4.1 / Gradle 9.6.0 に対応する Android Studio
 - Android SDK 37 (compileSdk), minSdk 31
-- JDK 11 (Android Studio 同梱の JBR を使用)
+- Gradle実行用JDK（検証環境はJDK 25）。Javaソース互換性は11。
 
 ### コマンドラインビルド
 
@@ -39,7 +39,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 ## 画面構成
 
 プロジェクトは仕様書 v0.8 第11章に基づき、6つの画面（SC01〜SC06）で構成される。
-UI とデータ層（Room）は接続済み。BLE 通信・Foreground Service・Android 通知の発行は未実装。
+UI・Room・Android通知・期限再評価を接続済み。BLE／同期／通信Foreground Serviceと登録APIは別担当の接続待ち。詳細な要件分類・接続契約・検証結果は [設計照合記録](docs/remaining-features.md) を参照。
 
 | 画面ID | 画面名 | Fragment クラス | レイアウトファイル |
 |---|---|---|---|
@@ -157,7 +157,7 @@ Material Symbols の配信 SVG は `viewBox="0 -960 960 960"`（960 グリッド
 Android vector には viewBox の最小座標が無いため、`viewportWidth/Height=960`（`width=24dp / height=24dp`）とし、
 全 `<path>` を `<group android:translateY="960">` で囲んで y を 0..960 へ移して vector drawable 化している
 （`viewportWidth=24` にすると y が -960..0 のまま残り、何も描画されない）。
-色は必ずテーマから取る（`app:iconTint` / `app:startIconTint` / `android:tint` に `?attr/...`）。
+色は必ずテーマから取る（`app:iconTint` / `app:startIconTint` / `app:tint` に `?attr/...`）。
 
 ## アニメーション方針
 
@@ -168,12 +168,12 @@ Android vector には viewBox の最小座標が無いため、`viewportWidth/He
 
 ## 緊急時モード（Emergency Mode）
 
-緊急時モードは `SessionStatus.canCommunicate` が true の状態（ACTIVE かつ relayEnabled）を指す。
+緊急時モードは未満了の期間がある状態（ACTIVE または CLOCK_UNCERTAIN）を指す。通信可能とは限らない。
 
 - **モードの保持:** `MainActivity` が唯一の保持者（`emergencyMode` フィールド）。フラグメントは `onSessionStatus` で Activity に状態を通知する。
-- **モード中の画面:** ホームは常に SC04（緊急時画面）を表示する。SC05（通知対象者）・SC06（通知履歴）も緊急時ダークテーマ（`Theme.Survival.EmergencyDark`）で表示される。
-- **起動時の初期画面:** セッション状態（`UiData.checkSession`）が確定してから決定する。未登録→SC01、緊急時モード→SC04、それ以外→SC02。1200ms のフォールバックを設け、状態が返らない場合は未登録／登録済みで SC01/SC02 を出す。
-- **モード切替:** 緊急時モードが変わったらテーマを再適用し、必要に応じて現在の画面を作り直す（SC02↔SC04 の遷移、SC05/SC06 のテーマ再 inflate）。
+- **モード中の画面:** ホームは常に SC04（緊急時画面）を表示する。SC05（通知対象者）・SC06（通知履歴）は設計書§11.11どおり常にライトテーマ。
+- **起動時の初期画面:** セッション状態（`UiData.checkSession`）が確定してから決定する。未登録→SC01、緊急時モード→SC04、それ以外→SC02。状態未確認では操作を開始せず、保存状態の読み込み失敗時は再試行を案内する。
+- **モード切替:** 緊急時モードが変わったらテーマを再適用し、必要に応じて現在の画面を作り直す（SC02↔SC04 の遷移）。
 
 ## データ層との統合
 
@@ -182,17 +182,17 @@ UI は DB を直接触らず、`ui/data/UiData.java` を通して `data/SafetyRe
 
 | 画面 | 実データの使い方 |
 |---|---|
-| SC01 | 名前を検証して `UserProfile.register()`（個人ID 1..0xFFFFFF をローカル生成・保存） |
+| SC01 | `UserProfile.register()`で非同期登録・永続保存。debugは明示的デモID入力、releaseはRegistrationGatewayのAPI接続待ち。ランダムIDは発行しない |
 | SC02 | 自分の個人ID（`UserProfile`）を表示・コピー・共有。生存登録はタイマー作動中なら SC04、停止中は SC03 |
-| SC03 | `KyushuMunicipalities.prefectures()`（同梱の九州自治体マスター）で県・市町村を選択し、確定で `startSession()` |
+| SC03 | `KyushuMunicipalities.prefectures()`（同梱の九州自治体マスター）で県・市町村を選択し、確定操作時刻のトークンを渡して `startSessionAtConfirmation()` |
 | SC04 | `checkSession()` で期限判定（`checkAndEndExpiredSession()`）を伴う状態取得→`SessionStatus` に応じて`remainingMillis` のスナップショットを1秒ずつ減らして表示（0で再確認→SC02 へ）。`currentWatchStatuses()` で〇／ーを表示 |
 | SC05 | `watchTargets()` / `addWatchTarget()` / `deleteWatchTarget()` で通知対象を CRUD（重複は DB の戻り値で判定） |
-| SC06 | `currentWatchStatuses()` で現在の通信期間の受信状態を表示 |
+| SC06 | `currentWatchStatuses()` で今回の受信状態を表示。通知権限・配信状態・再試行も表示 |
 
 - 〇＝`RECEIVED`（今回のACTIVE期間に受信）、ー＝`NOT_RECEIVED`、全件 `NO_ACTIVE_SESSION`＝「現在の通信期間なし」、0件＝「通知対象者が登録されていません」。
 - `currentWatchStatuses()` は履歴から導出しない。履歴表示（`validHistories()`）は今回の画面では未使用。
 - 期限判定は `checkAndEndExpiredSession()` 一本化。カウントダウンは `remainingMillis` の表示スナップショットであり、期限判定はデータ層が行う。
-- `SessionStopHandler` は現状ログとID記録のみのプレースホルダで、BLE/Service の実停止処理は未実装。
+- `UiData.setSessionStopHandler()` に通信所有者の停止処理を接続する。既定では通信未接続と表示し、動作中とは表示しない。
 
 ### 緊急時モードと画面遷移（§11.1 / §11.5 / §11.8）
 
@@ -219,13 +219,12 @@ UI は DB を直接触らず、`ui/data/UiData.java` を通して `data/SafetyRe
 
 ## 未実装の範囲
 
-以下は **実装していない**（TODO コメントを残している）：
+以下は **実装していない**：
 
 - BLE/GATT 通信（SC04 の通信状態表示は「通信期間中／通信できません／未開始」の段階表示。
   通信不能理由の実検知は BLE・権限・Foreground Service の実装後）
-- 個人ID のサーバ発行（現状は端末内生成のみ）
+- 個人IDのサーバ発行・認証・復旧。debugは別applicationId `com.example.crosspath.debug` でデモIDを入力し、releaseには持ち込まない。
 - Foreground Service
-- Android 通知の発行（`NotificationHistory` の PENDING/POSTED/BLOCKED を使う Dispatcher）
 - 登録 API（サーバ側の本人登録）
 - ViewModel 層（現状は Fragment から `UiData` を直接呼ぶ薄い構成）
 - BLE/Service の実停止処理（`SessionStopHandler` の実通信停止）

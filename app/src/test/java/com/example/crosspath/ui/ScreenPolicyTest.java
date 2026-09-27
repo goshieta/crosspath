@@ -118,7 +118,7 @@ public class ScreenPolicyTest {
         assertFalse(BottomTabs.showsTabs(Screen.SC01));
         assertFalse(BottomTabs.showsTabs(Screen.SC03));
 
-        assertTrue("CLOCK_UNCERTAIN 中は SC05 も緊急時ダーク",
+        assertFalse("SC05 は時計不確実時もライト",
                 ScreenThemes.isEmergencyVariant(
                         Screen.SC05, ScreenPolicy.emergencyMode(SessionStatus.State.CLOCK_UNCERTAIN)));
         assertFalse("期間終了中は SC05 はライト",

@@ -82,4 +82,21 @@ abstract class SafetyDao {
     @Query("UPDATE NotificationHistory SET deliveryState = :state WHERE notificationId = :id "
             + "AND deliveryState = 'PENDING' AND historyExpiresAt > :now")
     abstract int finishNotification(long id, String state, long now);
+
+    @Query("SELECT * FROM NotificationHistory WHERE localSessionId = :sessionId "
+            + "AND historyExpiresAt > :now AND deliveryState = 'PENDING' ORDER BY notificationId LIMIT 100")
+    abstract List<NotificationHistory> deliveryPage(String sessionId, long now);
+
+    @Query("SELECT COUNT(*) FROM NotificationHistory WHERE notificationId = :id AND historyExpiresAt > :now")
+    abstract int hasValidHistory(long id, long now);
+
+    @Query("UPDATE NotificationHistory SET deliveryState = 'PENDING' WHERE localSessionId = :sessionId "
+            + "AND deliveryState = 'BLOCKED_PERMISSION' AND historyExpiresAt > :now")
+    abstract int retryBlocked(String sessionId, long now);
+
+    @Query("SELECT COALESCE(SUM(deliveryState = 'PENDING'), 0) AS pending, "
+            + "COALESCE(SUM(deliveryState = 'POSTED'), 0) AS posted, "
+            + "COALESCE(SUM(deliveryState = 'BLOCKED_PERMISSION'), 0) AS blocked "
+            + "FROM NotificationHistory WHERE localSessionId = :sessionId AND historyExpiresAt > :now")
+    abstract NotificationDeliveryStatus deliveryStatus(String sessionId, long now);
 }

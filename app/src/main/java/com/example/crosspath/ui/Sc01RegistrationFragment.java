@@ -43,6 +43,7 @@ public class Sc01RegistrationFragment extends Fragment {
     private TextView resultText;
     private MaterialButton copyButton;
     private MaterialButton homeButton;
+    private android.widget.EditText debugId;
 
     @Nullable
     @Override
@@ -75,25 +76,52 @@ public class Sc01RegistrationFragment extends Fragment {
             ((MainActivity) getActivity()).applyScreenTheme(Screen.SC01);
         }
 
+        if (com.example.crosspath.registration.RegistrationProvider.HAS_DEBUG_INPUT) {
+            debugId = new android.widget.EditText(requireContext());
+            debugId.setId(R.id.debug_registration_id);
+            debugId.setHint("デモ専用ID（端末間で重複しない1〜16777215）");
+            debugId.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            ViewGroup parent = (ViewGroup) registerButton.getParent();
+            parent.addView(debugId, parent.indexOfChild(registerButton));
+        }
+        if (UserProfile.isRegistered(requireContext())) showRegistered();
         registerButton.setOnClickListener(v -> onRegisterClicked());
         copyButton.setOnClickListener(v -> onCopyClicked());
         homeButton.setOnClickListener(v -> onHomeClicked());
     }
 
     private void onRegisterClicked() {
+        if (!registerButton.isEnabled()) return;
         String name = nameEditText.getText() != null ? nameEditText.getText().toString().trim() : "";
 
         // 空白のみの名前は登録不可（仕様 §11.2）— TextInputLayout#setError で表示
-        if (name.isEmpty()) {
+        if (name.codePoints().allMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c))) {
             nameInputLayout.setError(getString(R.string.sc01_error_blank_name));
             return;
         }
         nameInputLayout.setError(null);
 
-        // 実データとして名前登録 + 個人IDを表示
-        UserProfile.register(requireContext(), name);
-        idValueText.setText(String.valueOf(UserProfile.personalId(requireContext())));
+        registerButton.setEnabled(false);
+        final View owner = requireView();
+        com.example.crosspath.ui.data.UiData.onResult(UserProfile.register(requireContext(), name,
+                debugId == null ? "" : debugId.getText().toString().trim()), assigned -> {
+            if (!isAdded() || getView() != owner) return;
+            showRegistered();
+        }, error -> {
+            if (!isAdded() || getView() != owner) return;
+            registerButton.setEnabled(true);
+            Throwable cause = error;
+            while (cause.getCause() != null) cause = cause.getCause();
+            resultText.setText(cause.getMessage());
+            resultText.setVisibility(View.VISIBLE);
+        });
+    }
 
+    private void showRegistered() {
+        registerButton.setEnabled(false);
+        nameEditText.setEnabled(false);
+        if (debugId != null) debugId.setEnabled(false);
+        idValueText.setText(String.valueOf(UserProfile.personalId(requireContext())));
         // 登録結果表示 仕様 §11.2(4)（成功アイコン付き）
         resultText.setText(R.string.sc01_result_success);
         TextViewCompat.setCompoundDrawableTintList(resultText, ColorStateList.valueOf(

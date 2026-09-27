@@ -40,6 +40,7 @@ public class Sc03MunicipalityFragment extends Fragment {
 
     private List<KyushuMunicipalities.Prefecture> prefectures;
     private int selectedMunicipalityCode = -1;
+    private boolean saving;
 
     @Nullable
     @Override
@@ -81,10 +82,28 @@ public class Sc03MunicipalityFragment extends Fragment {
             ((MainActivity) getActivity()).applyScreenTheme(Screen.SC03);
         }
 
+        confirmButton.setEnabled(false);
+        prefectureDropdown.setSaveEnabled(false);
+        municipalityDropdown.setSaveEnabled(false);
+        if (savedInstanceState != null) {
+            int code = savedInstanceState.getInt("municipality", -1);
+            for (int i = 0; i < prefectures.size(); i++) {
+                for (KyushuMunicipalities.Entry entry : prefectures.get(i).municipalities) {
+                    if (entry.code == code) {
+                        prefectureDropdown.setText(prefectures.get(i).name, false);
+                        onPrefectureSelected(i);
+                        municipalityDropdown.setText(entry.name, false);
+                        selectedMunicipalityCode = code;
+                        confirmButton.setEnabled(true);
+                    }
+                }
+            }
+        }
         confirmButton.setOnClickListener(v -> onConfirmClicked());
     }
 
     private void onPrefectureSelected(int position) {
+        if (saving) return;
         // 県を変更したら市町村の選択を解除（仕様 §11.4）
         municipalityDropdown.setText("");
         selectedMunicipalityCode = -1;
@@ -107,6 +126,7 @@ public class Sc03MunicipalityFragment extends Fragment {
     }
 
     private void onMunicipalitySelected(int position) {
+        if (saving) return;
         // 選択された市町村のコードを保持
         int prefectureIndex = findPrefectureIndex(prefectureDropdown.getText().toString());
         if (prefectureIndex < 0) return;
@@ -126,41 +146,48 @@ public class Sc03MunicipalityFragment extends Fragment {
         return -1;
     }
 
-    private void onConfirmClicked() {
-        String prefecture = prefectureDropdown.getText() != null
-                ? prefectureDropdown.getText().toString() : "";
-        String municipality = municipalityDropdown.getText() != null
-                ? municipalityDropdown.getText().toString() : "";
+    @Override public void onSaveInstanceState(@NonNull Bundle out) {
+        super.onSaveInstanceState(out);
+        out.putInt("municipality", selectedMunicipalityCode);
+    }
 
-        if (prefecture.isEmpty() || municipality.isEmpty()) {
-            errorText.setText("県と市町村を選択してください");
-            errorText.setVisibility(View.VISIBLE);
+    private void onConfirmClicked() {
+        if (saving || selectedMunicipalityCode < 1) return;
+        int userId = UserProfile.personalId(requireContext());
+        if (userId == 0) {
+            ((NavHost) requireActivity()).navigatePush(Screen.SC01);
             return;
         }
-
-        // 既存の「県と市町村を選択してください」は未選択時のみ
-        if (selectedMunicipalityCode < 1) return;
-
-        // 処理中は確定ボタンを無効化
+        final int code = selectedMunicipalityCode;
+        final com.example.crosspath.data.ConfirmationClock.Token confirmed = UiData.confirmationTime();
+        final View owner = requireView();
+        saving = true;
         confirmButton.setEnabled(false);
+        prefectureLayout.setEnabled(false);
+        municipalityLayout.setEnabled(false);
+        ((MainActivity) requireActivity()).setConfirmationSaving(true);
+        UiData.onResult(UiData.execute(repo -> repo.startSessionAtConfirmation(userId, code, confirmed)), sessionId -> {
+            saving = false;
+            UiData.refreshTimerState();
+            if (!isAdded() || getView() != owner) return;
+            ((MainActivity) requireActivity()).setConfirmationSaving(false);
+            // Activity resolves the committed period, including a rotation during save.
+            UiData.checkSession(status -> {
+                if (isAdded() && getView() == owner) ((MainActivity) requireActivity()).onSessionStatus(status);
+            }, error -> showFailure(owner));
+        }, error -> {
+            saving = false;
+            showFailure(owner);
+        });
+    }
 
-        UiData.whenReady(repo -> UiData.onResult(
-                repo.startSession(UserProfile.personalId(requireContext()), selectedMunicipalityCode),
-                sessionId -> {
-                    UiData.refreshTimerState();
-                    if (!isAdded()) {
-                        return;
-                    }
-                    ((NavHost) requireActivity()).navigatePush(Screen.SC04);
-                },
-                error -> {
-                    if (!isAdded()) {
-                        return;
-                    }
-                    errorText.setText(R.string.sc03_error_start_failed);
-                    errorText.setVisibility(View.VISIBLE);
-                    confirmButton.setEnabled(true);
-                }
-        ));
+    private void showFailure(View owner) {
+        if (!isAdded() || getView() != owner) return;
+        ((MainActivity) requireActivity()).setConfirmationSaving(false);
+        errorText.setText(R.string.sc03_error_start_failed);
+        errorText.setVisibility(View.VISIBLE);
+        confirmButton.setEnabled(true);
+        prefectureLayout.setEnabled(true);
+        municipalityLayout.setEnabled(true);
     }
 }

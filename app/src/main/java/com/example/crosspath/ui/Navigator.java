@@ -40,6 +40,8 @@ public final class Navigator {
 
     /** 現在表示中の画面。未確定（まだ1度も遷移していない）なら null。 */
     @Nullable
+    public void restoreCurrent(Screen screen) { current = screen; }
+
     public Screen current() {
         return current;
     }

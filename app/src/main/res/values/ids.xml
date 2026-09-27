@@ -6,4 +6,5 @@
     <item name="sc04" type="id" />
     <item name="sc05" type="id" />
     <item name="sc06" type="id" />
+    <item name="debug_registration_id" type="id" />
 </resources>
